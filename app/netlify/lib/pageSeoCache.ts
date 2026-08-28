@@ -17,8 +17,16 @@ function store() {
   return getStore('seo-pages');
 }
 
+// Blob keys can't start with "/" — every real page path does
+// (sitemapTree.ts's URLs are all "/foo/bar/"), so strip it; "/" itself
+// (the home page) needs a non-empty placeholder.
+function keyFor(path: string): string {
+  const stripped = path.replace(/^\/+/, '');
+  return stripped === '' ? '__home__' : stripped;
+}
+
 export async function setCachedPage(path: string, data: PageSeoData): Promise<void> {
-  await store().setJSON(path, { data, fetchedAt: new Date().toISOString() } satisfies CachedPage);
+  await store().setJSON(keyFor(path), { data, fetchedAt: new Date().toISOString() } satisfies CachedPage);
 }
 
 export async function listCachedPages(): Promise<CachedPage[]> {
