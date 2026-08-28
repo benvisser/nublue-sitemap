@@ -58,7 +58,15 @@ function buildRealRows(
   for (const path of paths) {
     const entry = byPath[path];
     entry.localSeoScore = computeLocalSeoScore(entry.topQueries, entry.contentScore);
-    entry.recommendations = recommendationsFor(entry);
+    // Recommendations are entirely SE Ranking-derived (content score + audit
+    // issues); an empty keywordRows/auditRows pull (source down) already
+    // leaves them at their zero/empty defaults, so recommendationsFor would
+    // otherwise emit a misleading "no urgent issues" for a page we simply
+    // have no data on. Only synthesize them when SE Ranking actually
+    // returned something for this run.
+    if (keywordRows.length > 0 || auditRows.length > 0) {
+      entry.recommendations = recommendationsFor(entry);
+    }
   }
 
   return byPath;
@@ -101,17 +109,34 @@ function addProjectedRows(rows: Record<string, PageSeoData>): void {
   }
 }
 
+/** Runs one source's pull in isolation: a failure here (bad credentials, an
+ * endpoint that's changed, a rate limit) never takes down the other
+ * source's data — the snapshot still gets written with whatever succeeded,
+ * and `ok` tells the frontend which fields are real vs. not-yet-connected. */
+async function safely<T>(label: string, fallback: T, fn: () => Promise<T>): Promise<{ value: T; ok: boolean }> {
+  try {
+    return { value: await fn(), ok: true };
+  } catch (err) {
+    console.error(`[buildSnapshot] ${label} failed — leaving this source disconnected for this run:`, err);
+    return { value: fallback, ok: false };
+  }
+}
+
 export async function buildSnapshot(): Promise<SeoSnapshot> {
   const paths = currentSitePaths();
 
-  const [keywordRows, auditRows, sessionsByPath] = await Promise.all([getKeywordPositions(), getPageAudit(), getSessionsByPath()]);
+  const [keywords, audit, sessions] = await Promise.all([
+    safely('SE Ranking getKeywordPositions', [], getKeywordPositions),
+    safely('SE Ranking getPageAudit', [], getPageAudit),
+    safely('GA4 getSessionsByPath', {}, getSessionsByPath),
+  ]);
 
-  const pages = buildRealRows(keywordRows, auditRows, sessionsByPath, paths);
+  const pages = buildRealRows(keywords.value, audit.value, sessions.value, paths);
   addProjectedRows(pages);
 
   return {
     generatedAt: new Date().toISOString(),
-    sources: { seRanking: true, ga4: true },
+    sources: { seRanking: keywords.ok && audit.ok, ga4: sessions.ok },
     pages,
   };
 }

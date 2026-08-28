@@ -13,8 +13,25 @@ interface InspectorProps {
   onClose: () => void;
 }
 
+/** A stat tile that isn't backed by a connected source yet — grayed with a
+ * "coming soon" note instead of a fabricated or misleading number. */
+function PendingTile({ label }: { label: string }) {
+  return (
+    <div className="stat-tile stat-tile--pending">
+      <span className="stat-tile__label">{label}</span>
+      <span className="stat-tile__value">—</span>
+      <span className="stat-tile__sub">SE Ranking integration coming soon</span>
+    </div>
+  );
+}
+
 export function Inspector({ node, seo, isSample, onClose }: InspectorProps) {
   const row = node.url ? seo?.pages[node.url] : undefined;
+  // Sample mode (no real snapshot at all yet) keeps showing its fabricated
+  // numbers as a demo of the full UI. Once a real snapshot exists, each
+  // source's own success/failure on the last pull decides what's live.
+  const seRankingLive = isSample || Boolean(seo?.sources.seRanking);
+  const ga4Live = isSample || Boolean(seo?.sources.ga4);
 
   return (
     <>
@@ -36,6 +53,7 @@ export function Inspector({ node, seo, isSample, onClose }: InspectorProps) {
           )}
           {row?.projected && <span className="badge badge--projected">Projected estimate</span>}
           {isSample && <span className="badge badge--sample">Sample data — not live SE Ranking/GA4</span>}
+          {!isSample && !seRankingLive && <span className="badge badge--pending">SE Ranking integration coming soon</span>}
         </div>
 
         <div className="inspector__body">
@@ -46,89 +64,118 @@ export function Inspector({ node, seo, isSample, onClose }: InspectorProps) {
           ) : (
             <>
               <div className="stat-tiles">
-                <div className="stat-tile">
-                  <span className="stat-tile__label">Potential search volume</span>
-                  <span className="stat-tile__value">{formatNumber(row.totalSearchVolume)}</span>
-                  <span className="stat-tile__sub">monthly searches, all tracked keywords</span>
-                </div>
-                <div className="stat-tile">
-                  <span className="stat-tile__label">Potential traffic</span>
-                  <span className="stat-tile__value">{formatNumber(row.potentialTraffic)}</span>
-                  <span className="stat-tile__sub">est. monthly clicks at current rank</span>
-                </div>
+                {seRankingLive ? (
+                  <>
+                    <div className="stat-tile">
+                      <span className="stat-tile__label">Potential search volume</span>
+                      <span className="stat-tile__value">{formatNumber(row.totalSearchVolume)}</span>
+                      <span className="stat-tile__sub">monthly searches, all tracked keywords</span>
+                    </div>
+                    <div className="stat-tile">
+                      <span className="stat-tile__label">Potential traffic</span>
+                      <span className="stat-tile__value">{formatNumber(row.potentialTraffic)}</span>
+                      <span className="stat-tile__sub">est. monthly clicks at current rank</span>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <PendingTile label="Potential search volume" />
+                    <PendingTile label="Potential traffic" />
+                  </>
+                )}
                 <div className="stat-tile">
                   <span className="stat-tile__label">Actual traffic</span>
-                  <span className="stat-tile__value">{row.actualTraffic == null ? '—' : formatNumber(row.actualTraffic)}</span>
-                  <span className="stat-tile__sub">sessions, trailing 28d (GA4)</span>
+                  <span className="stat-tile__value">{ga4Live && row.actualTraffic != null ? formatNumber(row.actualTraffic) : '—'}</span>
+                  <span className="stat-tile__sub">{ga4Live ? 'sessions, trailing 28d (GA4)' : 'GA4 not connected yet'}</span>
                 </div>
-                <div className="stat-tile">
-                  <span className="stat-tile__label">Keywords tracked</span>
-                  <span className="stat-tile__value">{row.keywordCount}</span>
-                  <span className="stat-tile__sub">{row.top3Keywords} ranking top 3</span>
-                </div>
-                <div className="stat-tile">
-                  <span className="stat-tile__label">Opportunity</span>
-                  <span className="stat-tile__value">{formatNumber(opportunityScore(row))}</span>
-                  <span className="stat-tile__sub">traffic if score hit 100</span>
-                </div>
+                {seRankingLive ? (
+                  <>
+                    <div className="stat-tile">
+                      <span className="stat-tile__label">Keywords tracked</span>
+                      <span className="stat-tile__value">{row.keywordCount}</span>
+                      <span className="stat-tile__sub">{row.top3Keywords} ranking top 3</span>
+                    </div>
+                    <div className="stat-tile">
+                      <span className="stat-tile__label">Opportunity</span>
+                      <span className="stat-tile__value">{formatNumber(opportunityScore(row))}</span>
+                      <span className="stat-tile__sub">traffic if score hit 100</span>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <PendingTile label="Keywords tracked" />
+                    <PendingTile label="Opportunity" />
+                  </>
+                )}
               </div>
 
-              <div className="score-row">
-                <div>
-                  <h3 className="section-title" title="Composite: 60% average rank strength across this page's tracked keywords, 40% content/audit score — not a single SE Ranking field.">
-                    Local SEO score ⓘ
-                  </h3>
-                  <div className="gauge-row">
-                    <ScoreGauge score={row.localSeoScore} />
-                    <span className="gauge-row__label">Blend of keyword rank strength + content score — see tooltip</span>
+              {seRankingLive ? (
+                <div className="score-row">
+                  <div>
+                    <h3
+                      className="section-title"
+                      title="Composite: 60% average rank strength across this page's tracked keywords, 40% content/audit score — not a single SE Ranking field."
+                    >
+                      Local SEO score ⓘ
+                    </h3>
+                    <div className="gauge-row">
+                      <ScoreGauge score={row.localSeoScore} />
+                      <span className="gauge-row__label">Blend of keyword rank strength + content score — see tooltip</span>
+                    </div>
                   </div>
-                </div>
-                <div>
-                  <h3 className="section-title">Content score</h3>
-                  <div className="gauge-row">
-                    <ScoreGauge score={row.contentScore} />
-                    <div>
-                      {row.issues.length === 0 ? (
-                        <span className="gauge-row__label">No open issues</span>
-                      ) : (
-                        <ul className="issue-list">
-                          {row.issues.map((issue) => (
-                            <li key={issue}>{issue}</li>
-                          ))}
-                        </ul>
-                      )}
+                  <div>
+                    <h3 className="section-title">Content score</h3>
+                    <div className="gauge-row">
+                      <ScoreGauge score={row.contentScore} />
+                      <div>
+                        {row.issues.length === 0 ? (
+                          <span className="gauge-row__label">No open issues</span>
+                        ) : (
+                          <ul className="issue-list">
+                            {row.issues.map((issue) => (
+                              <li key={issue}>{issue}</li>
+                            ))}
+                          </ul>
+                        )}
+                      </div>
                     </div>
                   </div>
                 </div>
-              </div>
-
-              {row.topQueries.length > 0 && (
-                <div>
-                  <h3 className="section-title">Tracked keywords &amp; current rank ({row.topQueries.length})</h3>
-                  <div className="query-table-scroll">
-                    <table className="query-table">
-                      <thead>
-                        <tr>
-                          <th>Query</th>
-                          <th className="num">Volume</th>
-                          <th className="num">Position</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {row.topQueries.map((q) => (
-                          <tr key={q.query}>
-                            <td>{q.query}</td>
-                            <td className="num">{formatNumber(q.volume)}</td>
-                            <td className="num">{q.position ?? '—'}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
+              ) : (
+                <div className="pending-note">Local SEO score &amp; content score — SE Ranking integration coming soon.</div>
               )}
 
-              {row.recommendations.length > 0 && (
+              {seRankingLive ? (
+                row.topQueries.length > 0 && (
+                  <div>
+                    <h3 className="section-title">Tracked keywords &amp; current rank ({row.topQueries.length})</h3>
+                    <div className="query-table-scroll">
+                      <table className="query-table">
+                        <thead>
+                          <tr>
+                            <th>Query</th>
+                            <th className="num">Volume</th>
+                            <th className="num">Position</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {row.topQueries.map((q) => (
+                            <tr key={q.query}>
+                              <td>{q.query}</td>
+                              <td className="num">{formatNumber(q.volume)}</td>
+                              <td className="num">{q.position ?? '—'}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                )
+              ) : (
+                <div className="pending-note">Tracked keywords &amp; current rank — SE Ranking integration coming soon.</div>
+              )}
+
+              {seRankingLive && row.recommendations.length > 0 && (
                 <div>
                   <h3 className="section-title">Recommendations</h3>
                   <ol className="rec-list">

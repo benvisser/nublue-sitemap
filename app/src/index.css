@@ -594,6 +594,10 @@ button {
   background: var(--gray-100);
   color: var(--gray-600);
 }
+.badge--pending {
+  background: var(--gray-100);
+  color: var(--gray-600);
+}
 
 .inspector__body {
   padding: 18px 22px 32px;
@@ -629,6 +633,22 @@ button {
 .stat-tile__sub {
   font-size: 11px;
   color: rgba(21, 26, 66, 0.55);
+}
+.stat-tile--pending {
+  background: var(--gray-100);
+  opacity: 0.6;
+}
+.stat-tile--pending .stat-tile__value {
+  color: var(--gray-600);
+}
+
+.pending-note {
+  background: var(--gray-100);
+  color: rgba(21, 26, 66, 0.55);
+  font-size: 12.5px;
+  font-style: italic;
+  padding: 10px 12px;
+  border-radius: 8px;
 }
 
 .gauge-row {
