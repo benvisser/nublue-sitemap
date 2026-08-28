@@ -21,36 +21,55 @@ for the original design brief), plus the SEO/traffic layer discussed in that cha
 ```
 src/                    React app (Vite)
   data/sitemapTree.ts    the page tree — current + future versions
-  data/seoTypes.ts        shape of the SEO snapshot
+  data/seoTypes.ts        shape of a page's SEO data
+  hooks/usePageSeo.ts     fetches one page's data on demand (inspector)
+  hooks/useSeoSnapshot.ts aggregate view for heat map / list view / toolbar
 netlify/
   functions/
-    get-seo-snapshot.mts      serves the last snapshot to the frontend
-    refresh-seo-data-background.mts      nightly scheduled pull (SE Ranking + GA4 → snapshot)
-    refresh-seo-data-now-background.mts  same pull, callable on demand for first setup
+    get-page-seo.mts       fetches/caches ONE page's data — called when its inspector opens
+    get-seo-snapshot.mts   assembles the aggregate view from whatever's been cached so far
   lib/
-    seRankingClient.ts   SE Ranking API calls (server-only)
-    ga4Client.ts         GA4 Data API calls (server-only)
-    buildSnapshot.ts     combines both into one SeoSnapshot
-    seoConfig.ts         the path list the nightly job pulls data for
+    seRankingClient.ts       SE Ranking API calls (server-only)
+    seRankingProjectPull.ts  shared, TTL-cached whole-project SE Ranking pull
+    ga4Client.ts             GA4 Data API calls (server-only) — includes a
+                             single-page-filtered query
+    ga4Status.ts             tiny "did the last GA4 call succeed" record
+    buildSnapshot.ts         the math for turning raw pulls into one page's row
+    pageSeoCache.ts          write-through per-page cache backing get-seo-snapshot
+    seoConfig.ts             path list / future-page-to-parent mapping, from sitemapTree.ts
 ```
 
-**Why a nightly snapshot instead of calling SE Ranking/GA4 live from the
-browser?** Covered in the original design chat: a browser call would leak
-the SE Ranking API key and hit both APIs' rate limits on every page load.
-Instead `refresh-seo-data-background.mts` runs server-side on a schedule, writes one
-JSON snapshot to Netlify Blobs, and the app only ever reads that snapshot
-via `get-seo-snapshot.mts`.
+**Why per-page, on demand, instead of one nightly batch pull for all ~300
+pages?** The original design chat's concern (a browser call would leak
+the SE Ranking API key and hit both APIs' rate limits) still applies —
+neither API is ever called from the browser. But a full nightly pull of
+every page burns API quota on pages nobody's looking at that day. Instead:
 
-**There is no fabricated fallback data.** Each source (SE Ranking, GA4)
-runs independently in `buildSnapshot.ts` — a failure in one never blocks
-the other, and `sources.{seRanking,ga4}` on the snapshot records which
-actually succeeded on the last pull. The frontend never invents a number:
+- **GA4** is queried fresh, filtered to exactly one page, every time that
+  page's inspector opens (`ga4Client.ts`'s `getSessionsForPath`) — cheap
+  enough that there's no need to cache it.
+- **SE Ranking** has no equivalent cheap single-page lookup (their API is
+  bulk-only), so `seRankingProjectPull.ts` pulls the whole project once
+  and reuses it (12h TTL) across however many pages get opened in that
+  window, instead of hitting SE Ranking on every click.
+- Each computed page gets written to `pageSeoCache.ts`, which is what
+  `get-seo-snapshot.mts` reads to assemble the heat map / List View
+  columns / toolbar freshness stamp. **This means those views only ever
+  reflect pages that have actually been opened at least once** — they
+  start empty on a fresh deploy and fill in as the sitemap gets used,
+  rather than requiring a full batch pull to complete first. The
+  inspector's "↻ Refresh this page" link bypasses the SE Ranking TTL for
+  just that one page if you want the freshest possible pull.
+
+**There is no fabricated fallback data.** GA4 and SE Ranking are tracked
+independently — `sources.{seRanking,ga4}` on each response records which
+actually succeeded on that request. The frontend never invents a number:
 a field only ever shows real data from a source that's live; otherwise
 it's grayed out with a small "integration coming soon" / "not connected
-yet" note (`Inspector.tsx`), and if no pull has ever completed at all, the
-toolbar says so and every node reads "no data yet". This was a deliberate
-change after early testing — a fabricated demo snapshot made it hard to
-tell what was actually wired up versus placeholder.
+yet" note (`Inspector.tsx`), and a page that's never been opened reads
+"no data yet". This was a deliberate change after early testing — a
+fabricated demo snapshot made it hard to tell what was actually wired up
+versus placeholder.
 
 ## Local development
 
@@ -68,11 +87,11 @@ npm run dev                 # now http://localhost:5173 has real functions + you
 ```
 
 Skip `netlify link` if you just want to work on the UI — the functions
-still run locally, they'll just have no snapshot to serve without
-credentials, so every node reads "no data yet" (same as production before
-the first real pull — see the note above on why there's no fake fallback
-data). Either way, don't run a separate `netlify dev` process alongside
-this — the Vite plugin already covers what that would do.
+still run locally, they'll just have nothing to fetch without
+credentials, so every node reads "no data yet" (same as production for a
+page that's never been opened — see the note above on why there's no fake
+fallback data). Either way, don't run a separate `netlify dev` process
+alongside this — the Vite plugin already covers what that would do.
 
 ## Environment variables (set in Netlify site settings, not in code)
 
@@ -83,7 +102,6 @@ this — the Vite plugin already covers what that would do.
 | `SERANKING_API_BASE_URL` | seRankingClient.ts | optional override, see note below |
 | `GA4_PROPERTY_ID` | ga4Client.ts | numeric GA4 property ID |
 | `GA4_SERVICE_ACCOUNT_JSON` | ga4Client.ts | full service-account key JSON, as one string; grant it Viewer on the GA4 property (Admin → Property Access Management) and enable the Analytics Data API on its GCP project |
-| `REFRESH_TRIGGER_SECRET` | refresh-seo-data-now-background.mts | optional — required as an `x-refresh-secret` header on the manual-trigger endpoint once set |
 
 **⚠️ SE Ranking endpoint verification needed.** This sandbox couldn't reach
 seranking.com to confirm current endpoint paths/response fields against
@@ -97,17 +115,12 @@ shouldn't need the same check.
 
 ## First run after adding credentials
 
-The nightly schedule (06:00 UTC) will populate the snapshot on its own, but
-to see real data immediately after setting the env vars above:
-
-```
-curl -X POST https://<your-site>.netlify.app/.netlify/functions/refresh-seo-data-now-background \
-  -H "x-refresh-secret: $REFRESH_TRIGGER_SECRET"
-```
-
-This is a background function, so the request returns immediately (202) —
-check its logs in the Netlify UI, or poll `get-seo-snapshot` until
-`generatedAt` changes, to see when it's actually finished.
+Nothing to trigger — just open a page's inspector in the app. That calls
+`get-page-seo.mts`, which pulls SE Ranking + GA4 for that one page right
+then. If something's misconfigured you'll see it immediately: the
+relevant fields gray out with a "coming soon" / "not connected" note
+instead of a number. Check **Netlify → Logs → Functions →
+get-page-seo** for the actual error if that happens.
 
 ## Keeping the sitemap in sync with the live site
 

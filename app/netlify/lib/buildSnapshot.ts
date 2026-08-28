@@ -1,76 +1,11 @@
-import { computeLocalSeoScore, type KeywordQuery, type PageSeoData, type SeoSnapshot } from '../../src/data/seoTypes.js';
-import { currentSitePaths, projectedPaths } from './seoConfig.js';
-import { getKeywordPositions, getPageAudit } from './seRankingClient.js';
-import { getSessionsByPath } from './ga4Client.js';
+// Per-page SEO row computation — called by get-page-seo.mts for exactly
+// one path at a time. See seRankingProjectPull.ts and ga4Client.ts for
+// where keywordRows/auditRows/actualTraffic actually come from; this file
+// only does the math once you have them.
+import { computeLocalSeoScore, type KeywordQuery, type PageSeoData } from '../../src/data/seoTypes.js';
+import type { SeRankingAuditPage, SeRankingKeywordRow } from './seRankingClient.js';
 
 const PROJECTION_FACTOR = 0.15; // future page starts at ~15% of its parent's potential traffic
-
-function buildRealRows(
-  keywordRows: Awaited<ReturnType<typeof getKeywordPositions>>,
-  auditRows: Awaited<ReturnType<typeof getPageAudit>>,
-  sessionsByPath: Record<string, number>,
-  paths: string[],
-): Record<string, PageSeoData> {
-  const byPath: Record<string, PageSeoData> = {};
-
-  for (const path of paths) {
-    byPath[path] = {
-      path,
-      totalSearchVolume: 0,
-      potentialTraffic: 0,
-      actualTraffic: sessionsByPath[path] ?? null,
-      contentScore: 0,
-      localSeoScore: 0,
-      keywordCount: 0,
-      top3Keywords: 0,
-      issues: [],
-      topQueries: [],
-      recommendations: [],
-      projected: false,
-    };
-  }
-
-  const queriesByPath = new Map<string, KeywordQuery[]>();
-  for (const row of keywordRows) {
-    const entry = byPath[row.url];
-    if (!entry) continue; // keyword tracked against a URL outside our sitemap (e.g. old redirect)
-    entry.keywordCount += 1;
-    entry.totalSearchVolume += row.volume;
-    if (row.position != null && row.position <= 3) entry.top3Keywords += 1;
-    if (row.position != null) entry.potentialTraffic += estimateClicks(row.volume, row.position);
-    const list = queriesByPath.get(row.url) || [];
-    list.push({ query: row.keyword, volume: row.volume, position: row.position });
-    queriesByPath.set(row.url, list);
-  }
-  // Every tracked keyword for the page, most-searched first — this is the
-  // "current rank for tracked keywords" list, not a trimmed preview.
-  for (const [path, queries] of queriesByPath) {
-    byPath[path].topQueries = queries.sort((a, b) => b.volume - a.volume);
-  }
-
-  for (const row of auditRows) {
-    const entry = byPath[row.url];
-    if (!entry) continue;
-    entry.contentScore = row.score;
-    entry.issues = row.issues;
-  }
-
-  for (const path of paths) {
-    const entry = byPath[path];
-    entry.localSeoScore = computeLocalSeoScore(entry.topQueries, entry.contentScore);
-    // Recommendations are entirely SE Ranking-derived (content score + audit
-    // issues); an empty keywordRows/auditRows pull (source down) already
-    // leaves them at their zero/empty defaults, so recommendationsFor would
-    // otherwise emit a misleading "no urgent issues" for a page we simply
-    // have no data on. Only synthesize them when SE Ranking actually
-    // returned something for this run.
-    if (keywordRows.length > 0 || auditRows.length > 0) {
-      entry.recommendations = recommendationsFor(entry);
-    }
-  }
-
-  return byPath;
-}
 
 /** Rough CTR-by-position curve — good enough for a "potential traffic"
  * estimate; not a metric SE Ranking returns directly. */
@@ -89,54 +24,74 @@ function recommendationsFor(row: PageSeoData): string[] {
   return recs;
 }
 
-function addProjectedRows(rows: Record<string, PageSeoData>): void {
-  for (const { path, parentPath } of projectedPaths()) {
-    const parent = parentPath ? rows[parentPath] : undefined;
-    rows[path] = {
-      path,
-      totalSearchVolume: parent ? Math.round(parent.totalSearchVolume * PROJECTION_FACTOR) : 0,
-      potentialTraffic: parent ? Math.round(parent.potentialTraffic * PROJECTION_FACTOR) : 0,
-      actualTraffic: null,
-      contentScore: 0,
-      localSeoScore: 0,
-      keywordCount: 0,
-      top3Keywords: 0,
-      issues: [],
-      topQueries: parent ? parent.topQueries.slice(0, 3) : [],
-      recommendations: ['Build out content once this page ships — projected from the parent page\'s query cluster'],
-      projected: true,
-    };
+/** Builds the full row for one real (non-projected) page, given the
+ * project-wide SE Ranking pull (filtered here to this path) and this
+ * page's own GA4 session count. `seRankingOk` reflects whether the
+ * project pull actually succeeded recently — with it false, keywordRows/
+ * auditRows are empty by construction (see seRankingProjectPull.ts), so
+ * recommendations are skipped rather than emitting a misleading "no
+ * urgent issues" for a page we simply have no data on. */
+export function computePageRow(
+  path: string,
+  keywordRows: SeRankingKeywordRow[],
+  auditRows: SeRankingAuditPage[],
+  actualTraffic: number | null,
+  seRankingOk: boolean,
+): PageSeoData {
+  const row: PageSeoData = {
+    path,
+    totalSearchVolume: 0,
+    potentialTraffic: 0,
+    actualTraffic,
+    contentScore: 0,
+    localSeoScore: 0,
+    keywordCount: 0,
+    top3Keywords: 0,
+    issues: [],
+    topQueries: [],
+    recommendations: [],
+    projected: false,
+  };
+
+  const queries: KeywordQuery[] = [];
+  for (const kw of keywordRows) {
+    if (kw.url !== path) continue;
+    row.keywordCount += 1;
+    row.totalSearchVolume += kw.volume;
+    if (kw.position != null && kw.position <= 3) row.top3Keywords += 1;
+    if (kw.position != null) row.potentialTraffic += estimateClicks(kw.volume, kw.position);
+    queries.push({ query: kw.keyword, volume: kw.volume, position: kw.position });
   }
+  row.topQueries = queries.sort((a, b) => b.volume - a.volume);
+
+  const audit = auditRows.find((a) => a.url === path);
+  if (audit) {
+    row.contentScore = audit.score;
+    row.issues = audit.issues;
+  }
+
+  row.localSeoScore = computeLocalSeoScore(row.topQueries, row.contentScore);
+  if (seRankingOk) row.recommendations = recommendationsFor(row);
+
+  return row;
 }
 
-/** Runs one source's pull in isolation: a failure here (bad credentials, an
- * endpoint that's changed, a rate limit) never takes down the other
- * source's data — the snapshot still gets written with whatever succeeded,
- * and `ok` tells the frontend which fields are real vs. not-yet-connected. */
-async function safely<T>(label: string, fallback: T, fn: () => Promise<T>): Promise<{ value: T; ok: boolean }> {
-  try {
-    return { value: await fn(), ok: true };
-  } catch (err) {
-    console.error(`[buildSnapshot] ${label} failed — leaving this source disconnected for this run:`, err);
-    return { value: fallback, ok: false };
-  }
-}
-
-export async function buildSnapshot(): Promise<SeoSnapshot> {
-  const paths = currentSitePaths();
-
-  const [keywords, audit, sessions] = await Promise.all([
-    safely('SE Ranking getKeywordPositions', [], getKeywordPositions),
-    safely('SE Ranking getPageAudit', [], getPageAudit),
-    safely('GA4 getSessionsByPath', {}, getSessionsByPath),
-  ]);
-
-  const pages = buildRealRows(keywords.value, audit.value, sessions.value, paths);
-  addProjectedRows(pages);
-
+/** A future-state page that doesn't exist on the live site yet — never
+ * pulled from SE Ranking/GA4, just a rough estimate from its real parent
+ * page's numbers. */
+export function computeProjectedRow(path: string, parent: PageSeoData | null): PageSeoData {
   return {
-    generatedAt: new Date().toISOString(),
-    sources: { seRanking: keywords.ok && audit.ok, ga4: sessions.ok },
-    pages,
+    path,
+    totalSearchVolume: parent ? Math.round(parent.totalSearchVolume * PROJECTION_FACTOR) : 0,
+    potentialTraffic: parent ? Math.round(parent.potentialTraffic * PROJECTION_FACTOR) : 0,
+    actualTraffic: null,
+    contentScore: 0,
+    localSeoScore: 0,
+    keywordCount: 0,
+    top3Keywords: 0,
+    issues: [],
+    topQueries: parent ? parent.topQueries.slice(0, 3) : [],
+    recommendations: ["Build out content once this page ships — projected from the parent page's query cluster"],
+    projected: true,
   };
 }

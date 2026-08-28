@@ -1,5 +1,4 @@
 import type { ColorMode } from '../data/seoTypes';
-import type { RefreshState } from '../hooks/useSeoSnapshot';
 import { formatRelativeDate } from '../lib/format';
 import type { SiteVersion } from '../data/sitemapTree';
 
@@ -11,19 +10,9 @@ interface ToolbarProps {
   onColorModeChange: (m: ColorMode) => void;
   snapshotGeneratedAt: string;
   hasSnapshot: boolean;
-  refreshState: RefreshState;
-  onRefresh: () => void;
   onExpandAll: () => void;
   onCollapseAll: () => void;
 }
-
-const REFRESH_LABEL: Record<RefreshState, string> = {
-  idle: 'Refresh SEO Data',
-  triggering: 'Starting…',
-  waiting: 'Refreshing… (~1–2 min)',
-  done: 'Refreshed ✓',
-  error: 'Refresh failed — check logs',
-};
 
 export function Toolbar({
   version,
@@ -33,12 +22,9 @@ export function Toolbar({
   onColorModeChange,
   snapshotGeneratedAt,
   hasSnapshot,
-  refreshState,
-  onRefresh,
   onExpandAll,
   onCollapseAll,
 }: ToolbarProps) {
-  const refreshBusy = refreshState === 'triggering' || refreshState === 'waiting';
   const title = version === 'current' ? 'Current sitemap — callnublue.com' : 'Future state — proposed structure';
   const countLabel =
     version === 'current'
@@ -51,14 +37,14 @@ export function Toolbar({
       <span className="toolbar__count">{countLabel}</span>
 
       {hasSnapshot ? (
-        <span className="toolbar__freshness" title="Last SE Ranking + GA4 pull">
+        <span className="toolbar__freshness" title="Most recently opened page's SE Ranking + GA4 pull">
           <span className="toolbar__freshness-dot" />
-          SEO data as of {formatRelativeDate(snapshotGeneratedAt)}
+          Heat map last updated {formatRelativeDate(snapshotGeneratedAt)}
         </span>
       ) : (
-        <span className="toolbar__freshness toolbar__freshness--sample" title="No SE Ranking/GA4 pull has completed yet">
+        <span className="toolbar__freshness toolbar__freshness--sample" title="Open a page's inspector to pull its SE Ranking/GA4 data">
           <span className="toolbar__freshness-dot" />
-          No SEO data pulled yet
+          No pages inspected yet — click a node to pull its data
         </span>
       )}
 
@@ -70,15 +56,6 @@ export function Toolbar({
           <option value="local">Color by local SEO score</option>
           <option value="opportunity">Color by opportunity</option>
         </select>
-        <button
-          type="button"
-          className={`pill-btn pill-btn--outline-navy ${refreshState === 'error' ? 'pill-btn--error' : ''}`}
-          onClick={onRefresh}
-          disabled={refreshBusy}
-          title="Triggers a fresh SE Ranking + GA4 pull. Takes ~1-2 minutes; this button polls and updates automatically."
-        >
-          {REFRESH_LABEL[refreshState]}
-        </button>
         <button type="button" className="pill-btn pill-btn--outline-red" onClick={onExpandAll}>
           Expand All
         </button>

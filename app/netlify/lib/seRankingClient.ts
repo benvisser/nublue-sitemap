@@ -1,6 +1,7 @@
-// SE Ranking API client used only by the nightly refresh function
-// (netlify/functions/refresh-seo-data-background.mts) — never called from the browser,
-// so the API key never leaves the server.
+// SE Ranking API client used only by seRankingProjectPull.ts (which shares
+// one pull across every page view via a TTL cache — see that file for
+// why) — never called from the browser, so the API key never leaves the
+// server.
 //
 // ⚠️ VERIFY BEFORE FIRST REAL RUN: this project could not reach
 // seranking.com's docs from this sandbox (egress to that domain is

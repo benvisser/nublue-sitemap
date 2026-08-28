@@ -1,15 +1,15 @@
 import type { PageNode } from '../data/sitemapTree';
 import { BASE_URL } from '../data/sitemapTree';
-import type { SeoSnapshot } from '../data/seoTypes';
 import { opportunityScore } from '../data/seoTypes';
+import { usePageSeo } from '../hooks/usePageSeo';
 import { formatNumber } from '../lib/format';
 import { LinkIcon } from './LinkIcon';
 import { ScoreGauge } from './ScoreGauge';
 
 interface InspectorProps {
   node: PageNode;
-  seo: SeoSnapshot | null;
   onClose: () => void;
+  onLoaded?: () => void;
 }
 
 /** A stat tile that isn't backed by a connected source yet — grayed with a
@@ -24,12 +24,11 @@ function PendingTile({ label }: { label: string }) {
   );
 }
 
-export function Inspector({ node, seo, onClose }: InspectorProps) {
-  const row = node.url ? seo?.pages[node.url] : undefined;
-  // No fabricated fallback: each field only ever shows a number when its
-  // source actually returned one on the last pull.
-  const seRankingLive = Boolean(seo?.sources.seRanking);
-  const ga4Live = Boolean(seo?.sources.ga4);
+export function Inspector({ node, onClose, onLoaded }: InspectorProps) {
+  const { status, result, refresh } = usePageSeo(node.url, onLoaded);
+  const row = result?.page;
+  const seRankingLive = Boolean(result?.sources.seRanking);
+  const ga4Live = Boolean(result?.sources.ga4);
 
   return (
     <>
@@ -49,17 +48,42 @@ export function Inspector({ node, seo, onClose }: InspectorProps) {
               <LinkIcon size={13} /> Open live page
             </a>
           )}
-          {row?.projected && <span className="badge badge--projected">Projected estimate</span>}
-          {!seRankingLive && <span className="badge badge--pending">SE Ranking integration coming soon</span>}
-          {!ga4Live && <span className="badge badge--pending">GA4 not connected yet</span>}
+          {row && (
+            <div className="inspector__badges">
+              {row.projected && <span className="badge badge--projected">Projected estimate</span>}
+              {!seRankingLive && <span className="badge badge--pending">SE Ranking integration coming soon</span>}
+              {!ga4Live && <span className="badge badge--pending">GA4 not connected yet</span>}
+              {status === 'ready' && !row.projected && (
+                <button type="button" className="inspector__refresh" onClick={() => refresh()} title="Force a fresh pull for this page, bypassing the cache">
+                  ↻ Refresh this page
+                </button>
+              )}
+            </div>
+          )}
         </div>
 
         <div className="inspector__body">
-          {!row ? (
+          {status === 'idle' && (
             <p style={{ fontSize: 13.5, color: 'var(--text-body)' }}>
-              No SEO/traffic data for this node yet{node.kind === 'cluster' ? ' — open a page inside this group to inspect it.' : '.'}
+              No SEO/traffic data for this node{node.kind === 'cluster' ? ' — open a page inside this group to inspect it.' : '.'}
             </p>
-          ) : (
+          )}
+
+          {status === 'loading' && <p style={{ fontSize: 13.5, color: 'var(--text-body)' }}>Loading SEO/traffic data…</p>}
+
+          {status === 'error' && (
+            <p style={{ fontSize: 13.5, color: 'var(--text-body)' }}>
+              Couldn't load data for this page. <button type="button" className="inspector__refresh" onClick={() => refresh(false)}>Try again</button>
+            </p>
+          )}
+
+          {status === 'ready' && !row && (
+            <p style={{ fontSize: 13.5, color: 'var(--text-body)' }}>
+              No SEO/traffic data for this node{node.kind === 'cluster' ? ' — open a page inside this group to inspect it.' : '.'}
+            </p>
+          )}
+
+          {status === 'ready' && row && (
             <>
               <div className="stat-tiles">
                 {seRankingLive ? (

@@ -582,6 +582,20 @@ button {
   color: var(--blue);
   width: fit-content;
 }
+.inspector__badges {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+.inspector__refresh {
+  background: none;
+  border: 0;
+  cursor: pointer;
+  font: 700 11px/1 var(--font-sans);
+  color: var(--blue);
+  padding: 4px 0;
+}
 .badge {
   display: inline-flex;
   align-items: center;
@@ -597,10 +611,6 @@ button {
 .badge--projected {
   background: #fff8e1;
   color: #8a6d00;
-}
-.badge--sample {
-  background: var(--gray-100);
-  color: var(--gray-600);
 }
 .badge--pending {
   background: var(--gray-100);

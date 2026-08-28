@@ -1,19 +1,35 @@
-// On-demand function the frontend fetches on load. Just serves whatever
-// refresh-seo-data-background.mts last wrote — no live SE Ranking/GA4 calls happen
-// here, so this stays fast and never touches either API's rate limit.
-import { getStore } from '@netlify/blobs';
+// Aggregate view for the node-map heat map, List View's sortable columns,
+// and the toolbar's freshness stamp. Assembled from whatever get-page-seo.mts
+// has computed and cached so far (see pageSeoCache.ts) — under the
+// per-page "fetch when the page loads" model, that means it only reflects
+// pages someone has actually opened at least once, not a full nightly
+// pull of every page. Starts empty on a fresh deploy and fills in as the
+// sitemap gets used.
+import { listCachedPages } from '../lib/pageSeoCache.js';
+import { peekProjectPull } from '../lib/seRankingProjectPull.js';
+import { peekGa4Status } from '../lib/ga4Status.js';
 
 export default async () => {
-  const store = getStore('seo-snapshot');
-  const snapshot = await store.get('current.json', { type: 'json' });
+  const cachedPages = await listCachedPages();
+  const [seRanking, ga4] = await Promise.all([peekProjectPull(), peekGa4Status()]);
 
-  if (!snapshot) {
-    // No nightly run has completed yet (fresh deploy, or credentials not
-    // configured). The frontend falls back to sample data in this case.
-    return new Response('no snapshot yet', { status: 404 });
+  const pages: Record<string, unknown> = {};
+  let generatedAt = '';
+  for (const { data, fetchedAt } of cachedPages) {
+    pages[data.path] = data;
+    if (fetchedAt > generatedAt) generatedAt = fetchedAt;
   }
 
+  const snapshot = {
+    generatedAt,
+    sources: {
+      seRanking: Boolean(seRanking?.ok),
+      ga4: Boolean(ga4?.ok),
+    },
+    pages,
+  };
+
   return new Response(JSON.stringify(snapshot), {
-    headers: { 'content-type': 'application/json', 'cache-control': 'public, max-age=300' },
+    headers: { 'content-type': 'application/json', 'cache-control': 'no-store' },
   });
 };

@@ -1,7 +1,9 @@
 // Google Analytics 4 (Data API v1beta) client — server-side only, called
-// from the nightly refresh function. Auth is a service account with the
-// GA4 property added as a "Viewer" (Admin → Property Access Management),
-// scoped to https://www.googleapis.com/auth/analytics.readonly.
+// from netlify/functions/get-page-seo.mts on demand (one page at a time,
+// per the "fetch when the page loads" model — see app/README.md). Auth is
+// a service account with the GA4 property added as a "Viewer" (Admin →
+// Property Access Management), scoped to
+// https://www.googleapis.com/auth/analytics.readonly.
 import { GoogleAuth } from 'google-auth-library';
 
 interface RunReportRow {
@@ -23,8 +25,7 @@ function serviceAccountCredentials(): Record<string, unknown> {
   }
 }
 
-/** Sessions per landing page path over the trailing `days` days. */
-export async function getSessionsByPath(days = 28): Promise<Record<string, number>> {
+async function runReport(body: Record<string, unknown>): Promise<RunReportResponse> {
   const propertyId = Netlify.env.get('GA4_PROPERTY_ID');
   if (!propertyId) throw new Error('GA4_PROPERTY_ID is not set');
 
@@ -37,19 +38,28 @@ export async function getSessionsByPath(days = 28): Promise<Record<string, numbe
   const res = await client.request<RunReportResponse>({
     url: `https://analyticsdata.googleapis.com/v1beta/properties/${propertyId}:runReport`,
     method: 'POST',
-    data: {
-      dateRanges: [{ startDate: `${days}daysAgo`, endDate: 'today' }],
-      dimensions: [{ name: 'pagePath' }],
-      metrics: [{ name: 'sessions' }],
-      limit: 100000,
+    data: body,
+  });
+  return res.data;
+}
+
+/** Sessions for exactly one page path over the trailing `days` days —
+ * filtered server-side by GA4, so this is cheap enough to call on every
+ * page open instead of needing its own cache/TTL. */
+export async function getSessionsForPath(path: string, days = 28): Promise<number> {
+  const data = await runReport({
+    dateRanges: [{ startDate: `${days}daysAgo`, endDate: 'today' }],
+    dimensions: [{ name: 'pagePath' }],
+    metrics: [{ name: 'sessions' }],
+    dimensionFilter: {
+      filter: { fieldName: 'pagePath', stringFilter: { matchType: 'EXACT', value: path } },
     },
+    limit: 10,
   });
 
-  const out: Record<string, number> = {};
-  for (const row of res.data.rows || []) {
-    const path = row.dimensionValues[0]?.value;
-    const sessions = Number(row.metricValues[0]?.value || 0);
-    if (path) out[path] = (out[path] || 0) + sessions;
+  let total = 0;
+  for (const row of data.rows || []) {
+    total += Number(row.metricValues[0]?.value || 0);
   }
-  return out;
+  return total;
 }
