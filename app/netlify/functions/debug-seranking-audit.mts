@@ -8,25 +8,17 @@
 //
 //   GET /.netlify/functions/debug-seranking-audit?path=/careers/
 //
-// Tries three things, all reported in the response so a single call
-// tells you which one actually works:
-//   1. findAudit() — the production path: list audits with ?search=callnublue.com
-//   2. listAllAudits() — every audit on the account, unfiltered, in case
-//      `search` isn't behaving as expected or the audit's `url` field
-//      doesn't literally contain "callnublue.com"
-//   3. getAuditById(SERANKING_PROJECT_ID) — a leftover env var from an
-//      earlier (guessed) architecture; if it happens to BE a valid audit
-//      id, this finds the audit even if #1 and #2 don't
-//
-// Whichever of those resolves an audit, its full crawled-page list is
-// fetched and searched for `path`, returning both the raw SE Ranking
-// record (every field, unmapped) and our current mapped interpretation
-// of it, side by side.
-import { fetchAllAuditPages, findAudit, getAuditById, listAllAudits, rawAuditRequest, toRelativePath } from '../lib/seRankingClient.js';
+// Only reports audits that actually belong to callnublue.com (the
+// account this API key has ~14 different clients' audits on) — not the
+// full unfiltered list, which would leak other clients' site names and
+// scores into the response for no reason.
+import { fetchAllAuditPages, getAuditById, listAllAudits, rawAuditRequest, toRelativePath } from '../lib/seRankingClient.js';
 
 function json(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body, null, 2), { status, headers: { 'content-type': 'application/json' } });
 }
+
+const DOMAIN = 'callnublue.com';
 
 export default async (req: Request) => {
   const url = new URL(req.url);
@@ -34,72 +26,75 @@ export default async (req: Request) => {
 
   const report: Record<string, unknown> = { path };
 
-  try {
-    report.viaSearch = await findAudit().catch((err) => ({ error: String(err) }));
-  } catch (err) {
-    report.viaSearch = { error: String(err) };
-  }
-
+  // Fetch the account's full audit list once, then filter to just
+  // callnublue.com locally — also tells us how many total audits exist
+  // on the account (14, as of writing) without printing every one.
+  let allAudits: Array<{ id: number | string; url: string; site_id?: number | null }> = [];
   try {
     const all = await listAllAudits();
-    report.viaListAll = { total: all.total, items: all.items };
+    allAudits = all.items || [];
+    report.totalAuditsOnAccount = all.total;
   } catch (err) {
-    report.viaListAll = { error: String(err) };
+    report.listAllAuditsError = String(err);
   }
+
+  const matchingAudits = allAudits.filter((a) => String(a.url ?? '').toLowerCase().includes(DOMAIN));
+  report.matchingAudits = matchingAudits;
 
   const projectId = Netlify.env.get('SERANKING_PROJECT_ID');
   if (projectId) {
-    try {
-      report.viaProjectIdEnvVar = await getAuditById(projectId);
-    } catch (err) {
-      report.viaProjectIdEnvVar = { error: String(err) };
-    }
+    report.viaProjectIdEnvVar = await getAuditById(projectId).catch((err) => ({ error: String(err) }));
   } else {
     report.viaProjectIdEnvVar = null;
   }
 
-  // Whichever approach actually returned an audit, use it to fetch pages
-  // and look for the requested path.
+  // Prefer the one with a live "has_project" pull if there are multiple
+  // (the account has both an old standalone audit and a newer
+  // project-linked one for this same domain).
   const resolvedAudit =
-    (report.viaSearch as { id?: unknown } | null)?.id != null
-      ? (report.viaSearch as { id: number | string })
-      : (report.viaProjectIdEnvVar as { id?: unknown } | null)?.id != null
-        ? (report.viaProjectIdEnvVar as { id: number | string })
-        : ((report.viaListAll as { items?: Array<{ id: number | string }> })?.items || [])[0];
+    matchingAudits.find((a) => (a as { has_project?: boolean }).has_project) ?? matchingAudits[0] ?? null;
 
-  if (resolvedAudit) {
-    try {
-      const pages = await fetchAllAuditPages(resolvedAudit.id);
-      report.resolvedAuditId = resolvedAudit.id;
-      report.totalPagesInAudit = pages.length;
-      report.samplePaths = pages.slice(0, 25).map((p) => toRelativePath(String((p as { url?: unknown }).url ?? '')));
-      const match = pages.find((p) => toRelativePath(String((p as { url?: unknown }).url ?? '')) === path);
-      report.matchedRawPage = match ?? null;
-      report.matchedPageAllFieldNames = match ? Object.keys(match) : [];
-
-      // The /pages list only gives issue COUNTS (errors/warnings/notices),
-      // not a free-text list of what those issues actually are. Probing a
-      // few plausible per-URL/per-issue endpoint shapes here — using the
-      // real audit id and this page's real numeric id — to see if SE
-      // Ranking exposes actual issue descriptions ("recommendations")
-      // anywhere, rather than guessing blind and redeploying repeatedly.
-      const matchId = (match as { id?: unknown } | undefined)?.id;
-      const fullUrl = `https://callnublue.com${path}`;
-      const candidates: Array<{ label: string; path: string; params: Record<string, string | number> }> = [
-        { label: 'issues-by-url (url param)', path: '/issues-by-url', params: { audit_id: resolvedAudit.id, url: fullUrl } },
-        { label: 'issues-by-url (page_id param)', path: '/issues-by-url', params: { audit_id: resolvedAudit.id, page_id: String(matchId ?? '') } },
-        { label: 'pages-by-issue (list, no filter)', path: '/pages-by-issue', params: { audit_id: resolvedAudit.id } },
-        { label: 'page issues via /pages/{id}/issues', path: `/pages/${matchId}/issues`, params: { audit_id: resolvedAudit.id } },
-      ];
-      report.endpointProbes = {};
-      for (const c of candidates) {
-        (report.endpointProbes as Record<string, unknown>)[c.label] = await rawAuditRequest(c.path, c.params);
-      }
-    } catch (err) {
-      report.pagesFetchError = String(err);
-    }
-  } else {
+  if (!resolvedAudit) {
     report.resolvedAuditId = null;
+    return json(report);
+  }
+
+  try {
+    const pages = await fetchAllAuditPages(resolvedAudit.id);
+    report.resolvedAuditId = resolvedAudit.id;
+    report.totalPagesInAudit = pages.length;
+    const match = pages.find((p) => toRelativePath(String((p as { url?: unknown }).url ?? '')) === path);
+    report.matchedRawPage = match ?? null;
+
+    // The /pages list only gives issue COUNTS (errors/warnings/notices),
+    // not a free-text list of what those issues actually are. The first
+    // round of guesses (issues-by-url, pages-by-issue, /pages/{id}/issues)
+    // all 404'd, so this round tries: the exact audit_id-as-query-param
+    // convention that DOES work for /pages, against more name variants;
+    // audit id embedded in the path itself instead of as a query param
+    // (a different REST convention SE Ranking might use for this sub-
+    // resource); the single "Get audit" endpoint in case it embeds
+    // per-issue detail; and a URL-filtered /pages call in case that's
+    // actually how you get one page's full issue breakdown.
+    const matchId = (match as { id?: unknown } | undefined)?.id;
+    const fullUrl = `https://${DOMAIN}${path}`;
+    const candidates: Array<{ label: string; path: string; params: Record<string, string | number> }> = [
+      { label: 'GET /{audit_id} (single audit detail)', path: `/${resolvedAudit.id}`, params: {} },
+      { label: '/issues?audit_id=', path: '/issues', params: { audit_id: resolvedAudit.id } },
+      { label: '/issues?audit_id=&page_id=', path: '/issues', params: { audit_id: resolvedAudit.id, page_id: String(matchId ?? '') } },
+      { label: '/audit-issues?audit_id=', path: '/audit-issues', params: { audit_id: resolvedAudit.id } },
+      { label: '/checks?audit_id=&page_id=', path: '/checks', params: { audit_id: resolvedAudit.id, page_id: String(matchId ?? '') } },
+      { label: '/pages filtered by url= (one page, full detail?)', path: '/pages', params: { audit_id: resolvedAudit.id, url: fullUrl } },
+      { label: `/{audit_id}/issues-by-url`, path: `/${resolvedAudit.id}/issues-by-url`, params: { url: fullUrl } },
+      { label: `/{audit_id}/pages-by-issue`, path: `/${resolvedAudit.id}/pages-by-issue`, params: {} },
+      { label: `/{audit_id}/pages/{page_id}`, path: `/${resolvedAudit.id}/pages/${matchId}`, params: {} },
+    ];
+    report.endpointProbes = {};
+    for (const c of candidates) {
+      (report.endpointProbes as Record<string, unknown>)[c.label] = await rawAuditRequest(c.path, c.params);
+    }
+  } catch (err) {
+    report.pagesFetchError = String(err);
   }
 
   return json(report);
