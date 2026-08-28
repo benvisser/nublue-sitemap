@@ -96,19 +96,19 @@ export async function getKeywordPositions(): Promise<SeRankingKeywordRow[]> {
   }));
 }
 
-interface AuditListItem {
+export interface AuditListItem {
   id: number | string;
   url: string;
   status?: string;
   stats?: { score?: number; errors?: number; warnings?: number; notices?: number; crawled?: number };
 }
 
-interface AuditListResponse {
+export interface AuditListResponse {
   items: AuditListItem[];
   total: number;
 }
 
-interface AuditPageItem {
+export interface AuditPageItem {
   url: string;
   status?: number | string;
   title?: string;
@@ -139,8 +139,9 @@ interface AuditPagesResponse {
 /** Finds the Website Audit already set up for callnublue.com in SE
  * Ranking (an audit has to have been created/run in their UI or API
  * first — this just locates it by domain). Returns null if none exists
- * yet, which is non-fatal — see seRankingProjectPull.ts. */
-async function findAudit(): Promise<AuditListItem | null> {
+ * yet, which is non-fatal — see seRankingProjectPull.ts. Exported for
+ * debug-seranking-audit.mts. */
+export async function findAudit(): Promise<AuditListItem | null> {
   const data = await getAudit<AuditListResponse>('', { limit: 50, search: DOMAIN });
   const items = data.items || [];
   const match = items.find((a) => String(a.url ?? '').includes(DOMAIN));
@@ -151,9 +152,30 @@ async function findAudit(): Promise<AuditListItem | null> {
   return match;
 }
 
+/** Every audit on the account, unfiltered — for debugging findAudit()
+ * when the `search` param doesn't behave as expected. */
+export async function listAllAudits(): Promise<AuditListResponse> {
+  return getAudit<AuditListResponse>('', { limit: 50 });
+}
+
+/** Fetches one audit by id directly (GET /project-management/audits/{id}),
+ * bypassing the search/list step entirely. Useful since a leftover
+ * SERANKING_PROJECT_ID env var from an earlier architecture might
+ * actually be a valid audit id. Returns null on any failure (unknown id,
+ * wrong auth, etc) rather than throwing, since this is a debug-only path. */
+export async function getAuditById(id: string | number): Promise<AuditListItem | null> {
+  try {
+    return await getAudit<AuditListItem>(`/${id}`);
+  } catch (err) {
+    console.log('[seRankingClient] getAuditById failed for', id, ':', err);
+    return null;
+  }
+}
+
 /** Pages a Website Audit's full crawled-page list (GET
- * /project-management/audits/pages?audit_id=). */
-async function fetchAllAuditPages(auditId: number | string): Promise<AuditPageItem[]> {
+ * /project-management/audits/pages?audit_id=). Exported for
+ * debug-seranking-audit.mts. */
+export async function fetchAllAuditPages(auditId: number | string): Promise<AuditPageItem[]> {
   const pageSize = 250;
   const items: AuditPageItem[] = [];
   let offset = 0;
@@ -169,7 +191,7 @@ async function fetchAllAuditPages(auditId: number | string): Promise<AuditPageIt
 
 /** Turns a full crawled URL into the site-relative path the rest of the
  * app keys pages by (e.g. "https://callnublue.com/electrical/" -> "/electrical/"). */
-function toRelativePath(rawUrl: string): string {
+export function toRelativePath(rawUrl: string): string {
   try {
     return new URL(rawUrl).pathname;
   } catch {
