@@ -117,7 +117,7 @@ alongside this — the Vite plugin already covers what that would do.
 | `SERANKING_AUDIT_API_BASE_URL` | seRankingClient.ts | optional override for the Website Audit API; defaults to `https://api.seranking.com/v1/project-management/audits` |
 | `GA4_PROPERTY_ID` | ga4Client.ts | numeric GA4 property ID |
 | `GA4_SERVICE_ACCOUNT_JSON` | ga4Client.ts, gscClient.ts | full service-account key JSON, as one string; shared by both GA4 and Search Console. Grant it Viewer on the GA4 property (Admin → Property Access Management), add it as a Search Console user (see below), and enable both the Analytics Data API and the Search Console API on its GCP project. **Set this in the Netlify dashboard, not via `netlify env:set`/the API** — a multi-line secret like this needs the dashboard's own multi-line field; other paths have corrupted it in practice. |
-| `GSC_SITE_URL` | gscClient.ts | the exact Search Console property string, e.g. `sc-domain:callnublue.com` for a Domain property, or `https://callnublue.com/` for a URL-prefix property — must match how the property is registered in Search Console |
+| `GSC_SITE_URL` | gscClient.ts | the exact Search Console property string, e.g. `sc-domain:callnublue.com` for a Domain property, or `https://callnublue.com/` for a URL-prefix property — must match how the property is registered in Search Console. callnublue.com is a Domain property, so this is set to `sc-domain:callnublue.com` |
 
 There's no `SERANKING_PROJECT_ID` — neither SE Ranking API surface used
 here has a "project" concept. `getKeywordPositions` (Data API, confirmed
