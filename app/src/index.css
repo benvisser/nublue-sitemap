@@ -661,12 +661,52 @@ button {
 .delta-tag--down {
   color: var(--red);
 }
-.stat-tile--pending {
-  background: var(--gray-100);
-  opacity: 0.6;
+.source-group {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
 }
-.stat-tile--pending .stat-tile__value {
-  color: var(--gray-600);
+.source-group + .source-group {
+  padding-top: 4px;
+  border-top: 1px solid var(--gray-200);
+}
+.source-group__header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.source-group__icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  width: 22px;
+  height: 22px;
+  border-radius: 999px;
+}
+.source-group__icon--ga4 {
+  background: #fef3d0;
+  color: #8a6d00;
+}
+.source-group__icon--gsc {
+  background: var(--pale-blue);
+  color: var(--blue);
+}
+.source-group__icon--seranking {
+  background: #e5f5ea;
+  color: var(--green);
+}
+.source-group__label {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--navy);
+}
+.source-group__body {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
 }
 
 .pending-note {

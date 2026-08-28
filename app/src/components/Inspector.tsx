@@ -5,6 +5,7 @@ import { usePageSeo } from '../hooks/usePageSeo';
 import { formatDelta, formatNumber, formatPercent, formatSeconds } from '../lib/format';
 import { LinkIcon } from './LinkIcon';
 import { ScoreGauge } from './ScoreGauge';
+import { Ga4Icon, SearchConsoleIcon, SeRankingIcon } from './SourceIcons';
 
 interface InspectorProps {
   node: PageNode;
@@ -12,14 +13,29 @@ interface InspectorProps {
   onLoaded?: () => void;
 }
 
-/** A stat tile that isn't backed by a connected source yet — grayed with a
- * "coming soon" note instead of a fabricated or misleading number. */
-function PendingTile({ label, note }: { label: string; note: string }) {
+/** Groups a chunk of the panel under a small source icon + label, so it's
+ * clear at a glance which API a section's numbers came from. Only ever
+ * rendered for a source that's actually live — see the `*Live` checks
+ * below, which gate whether a group appears at all rather than showing
+ * a grayed-out placeholder for a source that isn't connected. */
+function SourceGroup({
+  icon,
+  label,
+  tone,
+  children,
+}: {
+  icon: React.ReactNode;
+  label: string;
+  tone: 'ga4' | 'gsc' | 'seranking';
+  children: React.ReactNode;
+}) {
   return (
-    <div className="stat-tile stat-tile--pending">
-      <span className="stat-tile__label">{label}</span>
-      <span className="stat-tile__value">—</span>
-      <span className="stat-tile__sub">{note}</span>
+    <div className="source-group">
+      <div className="source-group__header">
+        <span className={`source-group__icon source-group__icon--${tone}`}>{icon}</span>
+        <span className="source-group__label">{label}</span>
+      </div>
+      <div className="source-group__body">{children}</div>
     </div>
   );
 }
@@ -37,6 +53,7 @@ export function Inspector({ node, onClose, onLoaded }: InspectorProps) {
   const seRankingLive = Boolean(result?.sources.seRanking);
   const ga4Live = Boolean(result?.sources.ga4);
   const gscLive = Boolean(result?.sources.gsc);
+  const anyLive = seRankingLive || ga4Live || gscLive;
 
   return (
     <>
@@ -95,73 +112,30 @@ export function Inspector({ node, onClose, onLoaded }: InspectorProps) {
             </p>
           )}
 
-          {status === 'ready' && row && (
-            <>
+          {status === 'ready' && row && !anyLive && (
+            <p style={{ fontSize: 13.5, color: 'var(--text-body)' }}>No connected data sources have returned data for this page yet.</p>
+          )}
+
+          {status === 'ready' && row && ga4Live && (
+            <SourceGroup icon={<Ga4Icon />} label="Google Analytics" tone="ga4">
               <div className="stat-tiles">
-                {seRankingLive ? (
-                  <>
-                    <div className="stat-tile">
-                      <span className="stat-tile__label">Potential search volume</span>
-                      <span className="stat-tile__value">{formatNumber(row.totalSearchVolume)}</span>
-                      <span className="stat-tile__sub">monthly searches, all tracked keywords</span>
-                    </div>
-                    <div className="stat-tile">
-                      <span className="stat-tile__label">Potential traffic</span>
-                      <span className="stat-tile__value">{formatNumber(row.potentialTraffic)}</span>
-                      <span className="stat-tile__sub">est. monthly clicks at current rank</span>
-                    </div>
-                  </>
-                ) : (
-                  <>
-                    <PendingTile label="Potential search volume" note="SE Ranking integration coming soon" />
-                    <PendingTile label="Potential traffic" note="SE Ranking integration coming soon" />
-                  </>
-                )}
-                {ga4Live ? (
-                  <>
-                    <div className="stat-tile">
-                      <span className="stat-tile__label">Actual traffic</span>
-                      <span className="stat-tile__value">{formatNumber(row.actualTraffic)}</span>
-                      <span className="stat-tile__sub">
-                        sessions, trailing 28d <DeltaTag current={row.actualTraffic} previous={row.previousTraffic} />
-                      </span>
-                    </div>
-                    <div className="stat-tile">
-                      <span className="stat-tile__label">Organic traffic</span>
-                      <span className="stat-tile__value">{formatNumber(row.organicTraffic)}</span>
-                      <span className="stat-tile__sub">
-                        from search <DeltaTag current={row.organicTraffic} previous={row.previousOrganicTraffic} />
-                      </span>
-                    </div>
-                  </>
-                ) : (
-                  <>
-                    <PendingTile label="Actual traffic" note="GA4 not connected yet" />
-                    <PendingTile label="Organic traffic" note="GA4 not connected yet" />
-                  </>
-                )}
-                {seRankingLive ? (
-                  <>
-                    <div className="stat-tile">
-                      <span className="stat-tile__label">Keywords tracked</span>
-                      <span className="stat-tile__value">{row.keywordCount}</span>
-                      <span className="stat-tile__sub">{row.top3Keywords} ranking top 3</span>
-                    </div>
-                    <div className="stat-tile">
-                      <span className="stat-tile__label">Opportunity</span>
-                      <span className="stat-tile__value">{formatNumber(opportunityScore(row))}</span>
-                      <span className="stat-tile__sub">traffic if score hit 100</span>
-                    </div>
-                  </>
-                ) : (
-                  <>
-                    <PendingTile label="Keywords tracked" note="SE Ranking integration coming soon" />
-                    <PendingTile label="Opportunity" note="SE Ranking integration coming soon" />
-                  </>
-                )}
+                <div className="stat-tile">
+                  <span className="stat-tile__label">Actual traffic</span>
+                  <span className="stat-tile__value">{formatNumber(row.actualTraffic)}</span>
+                  <span className="stat-tile__sub">
+                    sessions, trailing 28d <DeltaTag current={row.actualTraffic} previous={row.previousTraffic} />
+                  </span>
+                </div>
+                <div className="stat-tile">
+                  <span className="stat-tile__label">Organic traffic</span>
+                  <span className="stat-tile__value">{formatNumber(row.organicTraffic)}</span>
+                  <span className="stat-tile__sub">
+                    from search <DeltaTag current={row.organicTraffic} previous={row.previousOrganicTraffic} />
+                  </span>
+                </div>
               </div>
 
-              {ga4Live && (row.avgEngagementSeconds != null || row.topReferrers.length > 0) && (
+              {(row.avgEngagementSeconds != null || row.topReferrers.length > 0) && (
                 <div className="score-row">
                   <div>
                     <h3 className="section-title">Engagement</h3>
@@ -184,196 +158,209 @@ export function Inspector({ node, onClose, onLoaded }: InspectorProps) {
                   </div>
                 </div>
               )}
+            </SourceGroup>
+          )}
 
-              {seRankingLive ? (
-                <div className="score-row">
-                  <div>
-                    <h3
-                      className="section-title"
-                      title="Composite: 60% average rank strength across this page's tracked keywords, 40% content/audit score — not a single SE Ranking field."
-                    >
-                      Local SEO score ⓘ
-                    </h3>
-                    <div className="gauge-row">
-                      <ScoreGauge score={row.localSeoScore} />
-                      <span className="gauge-row__label">Blend of keyword rank strength + content score — see tooltip</span>
-                    </div>
+          {status === 'ready' && row && gscLive && (
+            <SourceGroup icon={<SearchConsoleIcon />} label="Search Console" tone="gsc">
+              <div className="stat-tiles">
+                <div className="stat-tile">
+                  <span className="stat-tile__label">Clicks</span>
+                  <span className="stat-tile__value">{formatNumber(row.searchClicks)}</span>
+                </div>
+                <div className="stat-tile">
+                  <span className="stat-tile__label">Impressions</span>
+                  <span className="stat-tile__value">{formatNumber(row.searchImpressions)}</span>
+                </div>
+                <div className="stat-tile">
+                  <span className="stat-tile__label">CTR</span>
+                  <span className="stat-tile__value">{formatPercent(row.searchCtr)}</span>
+                </div>
+                <div className="stat-tile">
+                  <span className="stat-tile__label">Avg. position</span>
+                  <span className="stat-tile__value">{row.avgSearchPosition ?? '—'}</span>
+                </div>
+              </div>
+              {row.topSearchQueries.length > 0 && (
+                <div className="query-table-scroll">
+                  <table className="query-table">
+                    <thead>
+                      <tr>
+                        <th>Query</th>
+                        <th className="num">Clicks</th>
+                        <th className="num">Impr.</th>
+                        <th className="num">Position</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {row.topSearchQueries.map((q) => (
+                        <tr key={q.query}>
+                          <td>{q.query}</td>
+                          <td className="num">{formatNumber(q.clicks)}</td>
+                          <td className="num">{formatNumber(q.impressions)}</td>
+                          <td className="num">{q.position}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </SourceGroup>
+          )}
+
+          {status === 'ready' && row && seRankingLive && (
+            <SourceGroup icon={<SeRankingIcon />} label="SE Ranking" tone="seranking">
+              <div className="stat-tiles">
+                <div className="stat-tile">
+                  <span className="stat-tile__label">Potential search volume</span>
+                  <span className="stat-tile__value">{formatNumber(row.totalSearchVolume)}</span>
+                  <span className="stat-tile__sub">monthly searches, all tracked keywords</span>
+                </div>
+                <div className="stat-tile">
+                  <span className="stat-tile__label">Potential traffic</span>
+                  <span className="stat-tile__value">{formatNumber(row.potentialTraffic)}</span>
+                  <span className="stat-tile__sub">est. monthly clicks at current rank</span>
+                </div>
+                <div className="stat-tile">
+                  <span className="stat-tile__label">Keywords tracked</span>
+                  <span className="stat-tile__value">{row.keywordCount}</span>
+                  <span className="stat-tile__sub">{row.top3Keywords} ranking top 3</span>
+                </div>
+                <div className="stat-tile">
+                  <span className="stat-tile__label">Opportunity</span>
+                  <span className="stat-tile__value">{formatNumber(opportunityScore(row))}</span>
+                  <span className="stat-tile__sub">traffic if score hit 100</span>
+                </div>
+              </div>
+
+              <div className="score-row">
+                <div>
+                  <h3
+                    className="section-title"
+                    title="Composite: 60% average rank strength across this page's tracked keywords, 40% content/audit score — not a single SE Ranking field."
+                  >
+                    Local SEO score ⓘ
+                  </h3>
+                  <div className="gauge-row">
+                    <ScoreGauge score={row.localSeoScore} />
+                    <span className="gauge-row__label">Blend of keyword rank strength + content score — see tooltip</span>
                   </div>
-                  <div>
-                    <h3 className="section-title">Content score</h3>
-                    <div className="gauge-row">
-                      <ScoreGauge score={row.contentScore} />
-                      <div>
-                        {row.issues.length === 0 ? (
-                          <span className="gauge-row__label">No open issues</span>
-                        ) : (
-                          <ul className="issue-list">
-                            {row.issues.map((issue) => (
-                              <li key={issue}>{issue}</li>
-                            ))}
-                          </ul>
-                        )}
-                      </div>
+                </div>
+                <div>
+                  <h3 className="section-title">Content score</h3>
+                  <div className="gauge-row">
+                    <ScoreGauge score={row.contentScore} />
+                    <div>
+                      {row.issues.length === 0 ? (
+                        <span className="gauge-row__label">No open issues</span>
+                      ) : (
+                        <ul className="issue-list">
+                          {row.issues.map((issue) => (
+                            <li key={issue}>{issue}</li>
+                          ))}
+                        </ul>
+                      )}
                     </div>
                   </div>
                 </div>
-              ) : (
-                <div className="pending-note">Local SEO score &amp; content score — SE Ranking integration coming soon.</div>
-              )}
+              </div>
 
-              {seRankingLive &&
-                (row.auditDetail ? (
-                  <div>
-                    <h3
-                      className="section-title"
-                      title="Real per-page facts from SE Ranking's Website Audit crawl (the 'Crawled pages' section) — not derived, this is what their crawler found on this exact URL."
-                    >
-                      Website Audit — crawled page details ⓘ
-                    </h3>
-                    <div className="stat-tiles" style={{ marginBottom: 10 }}>
-                      <div className="stat-tile">
-                        <span className="stat-tile__label">HTTP status</span>
-                        <span className="stat-tile__value">{row.auditDetail.status ?? '—'}</span>
-                      </div>
-                      <div className="stat-tile">
-                        <span className="stat-tile__label">Indexability</span>
-                        <span className="stat-tile__value" style={{ fontSize: 20 }}>
-                          {row.auditDetail.indexableStatus ?? '—'}
-                        </span>
-                      </div>
-                      <div className="stat-tile">
-                        <span className="stat-tile__label">Word count</span>
-                        <span className="stat-tile__value">{formatNumber(row.auditDetail.wordsCount)}</span>
-                      </div>
-                      <div className="stat-tile">
-                        <span className="stat-tile__label">Inlinks</span>
-                        <span className="stat-tile__value">{formatNumber(row.auditDetail.inlinks)}</span>
-                      </div>
-                      <div className="stat-tile">
-                        <span className="stat-tile__label">Outlinks (internal)</span>
-                        <span className="stat-tile__value">{formatNumber(row.auditDetail.outlinksInternal)}</span>
-                      </div>
-                      <div className="stat-tile">
-                        <span className="stat-tile__label">Outlinks (external)</span>
-                        <span className="stat-tile__value">{formatNumber(row.auditDetail.outlinksExternal)}</span>
-                      </div>
-                      <div className="stat-tile">
-                        <span className="stat-tile__label">Traffic forecast</span>
-                        <span className="stat-tile__value">{formatNumber(row.auditDetail.trafficForecast)}</span>
-                        <span className="stat-tile__sub">SE Ranking's own estimate</span>
-                      </div>
-                      <div className="stat-tile">
-                        <span className="stat-tile__label">Keywords (audit)</span>
-                        <span className="stat-tile__value">{formatNumber(row.auditDetail.numKeywords)}</span>
-                      </div>
-                    </div>
-                    <ul className="issue-list" style={{ marginBottom: 0 }}>
-                      <li>
-                        <strong>Title:</strong> {row.auditDetail.title || <em>missing</em>}
-                      </li>
-                      <li>
-                        <strong>Meta description:</strong> {row.auditDetail.description || <em>missing</em>}
-                      </li>
-                      <li>
-                        <strong>H1:</strong> {row.auditDetail.h1 || <em>missing</em>}
-                      </li>
-                      {row.auditDetail.canonicalUrl && (
-                        <li>
-                          <strong>Canonical:</strong> {row.auditDetail.canonicalUrl}
-                        </li>
-                      )}
-                    </ul>
-                  </div>
-                ) : (
-                  <div className="pending-note">
-                    This page wasn't found in the most recent SE Ranking Website Audit crawl — it may not have been recrawled since being
-                    added, or it 404'd/redirected during the crawl.
-                  </div>
-                ))}
-
-              {seRankingLive ? (
-                row.topQueries.length > 0 && (
-                  <div>
-                    <h3 className="section-title">Tracked keywords &amp; current rank ({row.topQueries.length})</h3>
-                    <div className="query-table-scroll">
-                      <table className="query-table">
-                        <thead>
-                          <tr>
-                            <th>Query</th>
-                            <th className="num">Volume</th>
-                            <th className="num">Position</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {row.topQueries.map((q) => (
-                            <tr key={q.query}>
-                              <td>{q.query}</td>
-                              <td className="num">{formatNumber(q.volume)}</td>
-                              <td className="num">{q.position ?? '—'}</td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  </div>
-                )
-              ) : (
-                <div className="pending-note">Tracked keywords &amp; current rank — SE Ranking integration coming soon.</div>
-              )}
-
-              {gscLive ? (
+              {row.auditDetail ? (
                 <div>
-                  <h3 className="section-title" title="Real measured Google Search Console performance — clicks, impressions, CTR, and average position as Google actually recorded them, trailing 28 days.">
-                    Search Console performance ⓘ
+                  <h3
+                    className="section-title"
+                    title="Real per-page facts from SE Ranking's Website Audit crawl (the 'Crawled pages' section) — not derived, this is what their crawler found on this exact URL."
+                  >
+                    Website Audit — crawled page details ⓘ
                   </h3>
                   <div className="stat-tiles" style={{ marginBottom: 10 }}>
                     <div className="stat-tile">
-                      <span className="stat-tile__label">Clicks</span>
-                      <span className="stat-tile__value">{formatNumber(row.searchClicks)}</span>
+                      <span className="stat-tile__label">HTTP status</span>
+                      <span className="stat-tile__value">{row.auditDetail.status ?? '—'}</span>
                     </div>
                     <div className="stat-tile">
-                      <span className="stat-tile__label">Impressions</span>
-                      <span className="stat-tile__value">{formatNumber(row.searchImpressions)}</span>
+                      <span className="stat-tile__label">Indexability</span>
+                      <span className="stat-tile__value" style={{ fontSize: 20 }}>
+                        {row.auditDetail.indexableStatus ?? '—'}
+                      </span>
                     </div>
                     <div className="stat-tile">
-                      <span className="stat-tile__label">CTR</span>
-                      <span className="stat-tile__value">{formatPercent(row.searchCtr)}</span>
+                      <span className="stat-tile__label">Word count</span>
+                      <span className="stat-tile__value">{formatNumber(row.auditDetail.wordsCount)}</span>
                     </div>
                     <div className="stat-tile">
-                      <span className="stat-tile__label">Avg. position</span>
-                      <span className="stat-tile__value">{row.avgSearchPosition ?? '—'}</span>
+                      <span className="stat-tile__label">Inlinks</span>
+                      <span className="stat-tile__value">{formatNumber(row.auditDetail.inlinks)}</span>
+                    </div>
+                    <div className="stat-tile">
+                      <span className="stat-tile__label">Outlinks (internal)</span>
+                      <span className="stat-tile__value">{formatNumber(row.auditDetail.outlinksInternal)}</span>
+                    </div>
+                    <div className="stat-tile">
+                      <span className="stat-tile__label">Outlinks (external)</span>
+                      <span className="stat-tile__value">{formatNumber(row.auditDetail.outlinksExternal)}</span>
+                    </div>
+                    <div className="stat-tile">
+                      <span className="stat-tile__label">Traffic forecast</span>
+                      <span className="stat-tile__value">{formatNumber(row.auditDetail.trafficForecast)}</span>
+                      <span className="stat-tile__sub">SE Ranking's own estimate</span>
+                    </div>
+                    <div className="stat-tile">
+                      <span className="stat-tile__label">Keywords (audit)</span>
+                      <span className="stat-tile__value">{formatNumber(row.auditDetail.numKeywords)}</span>
                     </div>
                   </div>
-                  {row.topSearchQueries.length > 0 && (
-                    <div className="query-table-scroll">
-                      <table className="query-table">
-                        <thead>
-                          <tr>
-                            <th>Query</th>
-                            <th className="num">Clicks</th>
-                            <th className="num">Impr.</th>
-                            <th className="num">Position</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {row.topSearchQueries.map((q) => (
-                            <tr key={q.query}>
-                              <td>{q.query}</td>
-                              <td className="num">{formatNumber(q.clicks)}</td>
-                              <td className="num">{formatNumber(q.impressions)}</td>
-                              <td className="num">{q.position}</td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  )}
+                  <ul className="issue-list" style={{ marginBottom: 0 }}>
+                    <li>
+                      <strong>Title:</strong> {row.auditDetail.title || <em>missing</em>}
+                    </li>
+                    <li>
+                      <strong>Meta description:</strong> {row.auditDetail.description || <em>missing</em>}
+                    </li>
+                    <li>
+                      <strong>H1:</strong> {row.auditDetail.h1 || <em>missing</em>}
+                    </li>
+                    {row.auditDetail.canonicalUrl && (
+                      <li>
+                        <strong>Canonical:</strong> {row.auditDetail.canonicalUrl}
+                      </li>
+                    )}
+                  </ul>
                 </div>
               ) : (
-                <div className="pending-note">Search Console performance — not connected yet.</div>
+                <div className="pending-note">
+                  This page wasn't found in the most recent SE Ranking Website Audit crawl — it may not have been recrawled since being
+                  added, or it 404'd/redirected during the crawl.
+                </div>
               )}
 
-              {seRankingLive && row.recommendations.length > 0 && (
+              {row.topQueries.length > 0 && (
+                <div>
+                  <h3 className="section-title">Tracked keywords &amp; current rank ({row.topQueries.length})</h3>
+                  <div className="query-table-scroll">
+                    <table className="query-table">
+                      <thead>
+                        <tr>
+                          <th>Query</th>
+                          <th className="num">Volume</th>
+                          <th className="num">Position</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {row.topQueries.map((q) => (
+                          <tr key={q.query}>
+                            <td>{q.query}</td>
+                            <td className="num">{formatNumber(q.volume)}</td>
+                            <td className="num">{q.position ?? '—'}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+
+              {row.recommendations.length > 0 && (
                 <div>
                   <h3 className="section-title">Recommendations</h3>
                   <ol className="rec-list">
@@ -386,7 +373,7 @@ export function Inspector({ node, onClose, onLoaded }: InspectorProps) {
                   </ol>
                 </div>
               )}
-            </>
+            </SourceGroup>
           )}
         </div>
       </aside>
