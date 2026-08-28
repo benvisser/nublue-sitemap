@@ -1,11 +1,9 @@
 import type { PageNode } from '../data/sitemapTree';
 import { BASE_URL } from '../data/sitemapTree';
-import { opportunityScore } from '../data/seoTypes';
 import { usePageSeo } from '../hooks/usePageSeo';
 import { formatDelta, formatNumber, formatPercent, formatSeconds } from '../lib/format';
 import { LinkIcon, RefreshIcon } from './LinkIcon';
-import { ScoreGauge } from './ScoreGauge';
-import { Ga4Icon, SearchConsoleIcon, SeRankingIcon } from './SourceIcons';
+import { Ga4Icon, SearchConsoleIcon } from './SourceIcons';
 
 interface InspectorProps {
   node: PageNode;
@@ -50,10 +48,13 @@ function DeltaTag({ current, previous }: { current: number | null; previous: num
 export function Inspector({ node, onClose, onLoaded }: InspectorProps) {
   const { status, result, refresh } = usePageSeo(node.url, onLoaded);
   const row = result?.page;
-  const seRankingLive = Boolean(result?.sources.seRanking);
+  // SE Ranking is temporarily hidden from the panel — see the comment
+  // above the removed SourceGroup below. `sources.seRanking` is still
+  // returned by the API and still drives the heat map / list view, this
+  // just stops the inspector from showing its all-zero cards.
   const ga4Live = Boolean(result?.sources.ga4);
   const gscLive = Boolean(result?.sources.gsc);
-  const anyLive = seRankingLive || ga4Live || gscLive;
+  const anyLive = ga4Live || gscLive;
 
   return (
     <>
@@ -93,10 +94,9 @@ export function Inspector({ node, onClose, onLoaded }: InspectorProps) {
             </div>
           </div>
           <span className="inspector__path">{node.url || '—'}</span>
-          {row && (row.projected || !seRankingLive || !ga4Live || !gscLive) && (
+          {row && (row.projected || !ga4Live || !gscLive) && (
             <div className="inspector__badges">
               {row.projected && <span className="badge badge--projected">Projected estimate</span>}
-              {!seRankingLive && <span className="badge badge--pending">SE Ranking integration coming soon</span>}
               {!ga4Live && <span className="badge badge--pending">GA4 not connected yet</span>}
               {!gscLive && <span className="badge badge--pending">Search Console not connected yet</span>}
             </div>
@@ -231,173 +231,15 @@ export function Inspector({ node, onClose, onLoaded }: InspectorProps) {
             </SourceGroup>
           )}
 
-          {status === 'ready' && row && seRankingLive && (
-            <SourceGroup icon={<SeRankingIcon />} label="SE Ranking" tone="seranking">
-              <div className="stat-tiles">
-                <div className="stat-tile">
-                  <span className="stat-tile__label">Potential search volume</span>
-                  <span className="stat-tile__value">{formatNumber(row.totalSearchVolume)}</span>
-                  <span className="stat-tile__sub">monthly searches, all tracked keywords</span>
-                </div>
-                <div className="stat-tile">
-                  <span className="stat-tile__label">Potential traffic</span>
-                  <span className="stat-tile__value">{formatNumber(row.potentialTraffic)}</span>
-                  <span className="stat-tile__sub">est. monthly clicks at current rank</span>
-                </div>
-                <div className="stat-tile">
-                  <span className="stat-tile__label">Keywords tracked</span>
-                  <span className="stat-tile__value">{row.keywordCount}</span>
-                  <span className="stat-tile__sub">{row.top3Keywords} ranking top 3</span>
-                </div>
-                <div className="stat-tile">
-                  <span className="stat-tile__label">Opportunity</span>
-                  <span className="stat-tile__value">{formatNumber(opportunityScore(row))}</span>
-                  <span className="stat-tile__sub">traffic if score hit 100</span>
-                </div>
-              </div>
-
-              <div className="score-row">
-                <div>
-                  <h3
-                    className="section-title"
-                    title="Composite: 60% average rank strength across this page's tracked keywords, 40% content/audit score — not a single SE Ranking field."
-                  >
-                    Local SEO score ⓘ
-                  </h3>
-                  <div className="gauge-row">
-                    <ScoreGauge score={row.localSeoScore} />
-                    <span className="gauge-row__label">Blend of keyword rank strength + content score — see tooltip</span>
-                  </div>
-                </div>
-                <div>
-                  <h3 className="section-title">Content score</h3>
-                  <div className="gauge-row">
-                    <ScoreGauge score={row.contentScore} />
-                    <div>
-                      {row.issues.length === 0 ? (
-                        <span className="gauge-row__label">No open issues</span>
-                      ) : (
-                        <ul className="issue-list">
-                          {row.issues.map((issue) => (
-                            <li key={issue}>{issue}</li>
-                          ))}
-                        </ul>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {row.auditDetail ? (
-                <div>
-                  <h3
-                    className="section-title"
-                    title="Real per-page facts from SE Ranking's Website Audit crawl (the 'Crawled pages' section) — not derived, this is what their crawler found on this exact URL."
-                  >
-                    Website Audit — crawled page details ⓘ
-                  </h3>
-                  <div className="stat-tiles" style={{ marginBottom: 10 }}>
-                    <div className="stat-tile">
-                      <span className="stat-tile__label">HTTP status</span>
-                      <span className="stat-tile__value">{row.auditDetail.status ?? '—'}</span>
-                    </div>
-                    <div className="stat-tile">
-                      <span className="stat-tile__label">Indexability</span>
-                      <span className="stat-tile__value" style={{ fontSize: 20 }}>
-                        {row.auditDetail.indexableStatus ?? '—'}
-                      </span>
-                    </div>
-                    <div className="stat-tile">
-                      <span className="stat-tile__label">Word count</span>
-                      <span className="stat-tile__value">{formatNumber(row.auditDetail.wordsCount)}</span>
-                    </div>
-                    <div className="stat-tile">
-                      <span className="stat-tile__label">Inlinks</span>
-                      <span className="stat-tile__value">{formatNumber(row.auditDetail.inlinks)}</span>
-                    </div>
-                    <div className="stat-tile">
-                      <span className="stat-tile__label">Outlinks (internal)</span>
-                      <span className="stat-tile__value">{formatNumber(row.auditDetail.outlinksInternal)}</span>
-                    </div>
-                    <div className="stat-tile">
-                      <span className="stat-tile__label">Outlinks (external)</span>
-                      <span className="stat-tile__value">{formatNumber(row.auditDetail.outlinksExternal)}</span>
-                    </div>
-                    <div className="stat-tile">
-                      <span className="stat-tile__label">Traffic forecast</span>
-                      <span className="stat-tile__value">{formatNumber(row.auditDetail.trafficForecast)}</span>
-                      <span className="stat-tile__sub">SE Ranking's own estimate</span>
-                    </div>
-                    <div className="stat-tile">
-                      <span className="stat-tile__label">Keywords (audit)</span>
-                      <span className="stat-tile__value">{formatNumber(row.auditDetail.numKeywords)}</span>
-                    </div>
-                  </div>
-                  <ul className="issue-list" style={{ marginBottom: 0 }}>
-                    <li>
-                      <strong>Title:</strong> {row.auditDetail.title || <em>missing</em>}
-                    </li>
-                    <li>
-                      <strong>Meta description:</strong> {row.auditDetail.description || <em>missing</em>}
-                    </li>
-                    <li>
-                      <strong>H1:</strong> {row.auditDetail.h1 || <em>missing</em>}
-                    </li>
-                    {row.auditDetail.canonicalUrl && (
-                      <li>
-                        <strong>Canonical:</strong> {row.auditDetail.canonicalUrl}
-                      </li>
-                    )}
-                  </ul>
-                </div>
-              ) : (
-                <div className="pending-note">
-                  This page wasn't found in the most recent SE Ranking Website Audit crawl — it may not have been recrawled since being
-                  added, or it 404'd/redirected during the crawl.
-                </div>
-              )}
-
-              {row.topQueries.length > 0 && (
-                <div>
-                  <h3 className="section-title">Tracked keywords &amp; current rank ({row.topQueries.length})</h3>
-                  <div className="query-table-scroll">
-                    <table className="query-table">
-                      <thead>
-                        <tr>
-                          <th>Query</th>
-                          <th className="num">Volume</th>
-                          <th className="num">Position</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {row.topQueries.map((q) => (
-                          <tr key={q.query}>
-                            <td>{q.query}</td>
-                            <td className="num">{formatNumber(q.volume)}</td>
-                            <td className="num">{q.position ?? '—'}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-              )}
-
-              {row.recommendations.length > 0 && (
-                <div>
-                  <h3 className="section-title">Recommendations</h3>
-                  <ol className="rec-list">
-                    {row.recommendations.map((rec, i) => (
-                      <li key={rec}>
-                        <span className="rec-list__num">{i + 1}</span>
-                        <span>{rec}</span>
-                      </li>
-                    ))}
-                  </ol>
-                </div>
-              )}
-            </SourceGroup>
-          )}
+          {/* SE Ranking (keyword volume/opportunity/content score/Website
+              Audit) is temporarily removed from the panel — the account's
+              data was coming back all zero/empty for every field, so a
+              section full of "0"s and em-dashes was worse than not
+              showing it. GA4 and Search Console are unaffected. To bring
+              it back once SE Ranking's own account/API access is sorted
+              out: restore the SourceGroup that used to sit here (see git
+              history — "none of this is working, remove for now"), and
+              re-add `seRankingLive`/`anyLive` and the badge above. */}
         </div>
       </aside>
     </>
