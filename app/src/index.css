@@ -573,14 +573,28 @@ button {
   font-size: 13px;
   color: rgba(21, 26, 66, 0.6);
 }
-.inspector__open-link {
+.inspector__title-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: auto;
+  flex: 0 0 auto;
+}
+.inspector__icon-btn {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  font-size: 12px;
-  font-weight: 700;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 999px;
+  border: 0;
+  background: var(--gray-100);
   color: var(--blue);
-  width: fit-content;
+  cursor: pointer;
+  flex: 0 0 auto;
+}
+.inspector__icon-btn:hover {
+  background: var(--pale-blue);
 }
 .inspector__badges {
   display: flex;

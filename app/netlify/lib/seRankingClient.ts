@@ -202,7 +202,14 @@ function issuesFor(page: AuditPageItem): string[] {
   const issues: string[] = [];
   const status = Number(page.status);
   if (Number.isFinite(status) && status >= 400) issues.push(`HTTP ${status} error`);
-  if (page.indexable_status && !/^indexable$/i.test(page.indexable_status)) issues.push(`Not indexable (${page.indexable_status})`);
+  // ⚠️ SE Ranking's healthy value here is "ok", not the "indexable" this
+  // originally assumed — that mismatch was flagging every indexable page
+  // as "Not indexable (ok)". Checking against a denylist of the values
+  // that actually mean something's wrong, rather than an allowlist of
+  // the one healthy value, since the full enum isn't documented.
+  if (page.indexable_status && /noindex|canonical|redirect|blocked|disallow|error/i.test(page.indexable_status)) {
+    issues.push(`Not indexable (${page.indexable_status})`);
+  }
   if (!page.title) issues.push('Missing title tag');
   else if (page.title_duplicate) issues.push('Duplicate title tag');
   if (!page.description) issues.push('Missing meta description');

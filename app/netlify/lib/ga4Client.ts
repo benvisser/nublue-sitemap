@@ -73,6 +73,16 @@ export interface PageTraffic {
   /** Average time (seconds) users engaged with the page per session,
    * current period — GA4's userEngagementDuration / sessions. */
   avgEngagementSeconds: number;
+  /** Share of sessions GA4 counted as "engaged" (lasted 10s+, had 2+
+   * pageviews, or fired a conversion event) — 0-1, current and previous
+   * period. A page with organic traffic but a low engagement rate is a
+   * classic sign the content isn't matching what people searched for,
+   * even if the keyword itself ranks fine — a useful SEO signal on its
+   * own, distinct from avgEngagementSeconds (a low rate with a decent
+   * average time usually means a few people read deeply while most
+   * bounce immediately). */
+  engagementRate: number;
+  previousEngagementRate: number;
   /** Top sources sending sessions to this page, current period,
    * highest first. */
   topReferrers: ReferrerRow[];
@@ -84,6 +94,8 @@ const EMPTY_TRAFFIC: PageTraffic = {
   organicSessions: 0,
   previousOrganicSessions: 0,
   avgEngagementSeconds: 0,
+  engagementRate: 0,
+  previousEngagementRate: 0,
   topReferrers: [],
 };
 
@@ -106,7 +118,7 @@ export async function getPageTraffic(path: string, days = 28): Promise<PageTraff
       // as the LAST value in dimensionValues, after the ones actually
       // listed below.
       dimensions: [{ name: 'sessionDefaultChannelGroup' }],
-      metrics: [{ name: 'sessions' }, { name: 'userEngagementDuration' }],
+      metrics: [{ name: 'sessions' }, { name: 'userEngagementDuration' }, { name: 'engagedSessions' }],
       dimensionFilter: pageFilter(path),
       limit: 50,
     }),
@@ -122,23 +134,30 @@ export async function getPageTraffic(path: string, days = 28): Promise<PageTraff
 
   const out = { ...EMPTY_TRAFFIC };
   let currentEngagementSeconds = 0;
+  let currentEngagedSessions = 0;
+  let previousEngagedSessions = 0;
   for (const row of byPeriod.rows || []) {
     const channel = row.dimensionValues[0]?.value ?? '';
     const period = row.dimensionValues[1]?.value; // implicit dateRange dimension, appended last: 'current' | 'previous'
     const sessions = Number(row.metricValues[0]?.value || 0);
     const engagement = Number(row.metricValues[1]?.value || 0);
+    const engagedSessions = Number(row.metricValues[2]?.value || 0);
     const isOrganic = channel === 'Organic Search';
 
     if (period === 'current') {
       out.sessions += sessions;
       currentEngagementSeconds += engagement;
+      currentEngagedSessions += engagedSessions;
       if (isOrganic) out.organicSessions += sessions;
     } else if (period === 'previous') {
       out.previousSessions += sessions;
+      previousEngagedSessions += engagedSessions;
       if (isOrganic) out.previousOrganicSessions += sessions;
     }
   }
   out.avgEngagementSeconds = out.sessions > 0 ? Math.round(currentEngagementSeconds / out.sessions) : 0;
+  out.engagementRate = out.sessions > 0 ? currentEngagedSessions / out.sessions : 0;
+  out.previousEngagementRate = out.previousSessions > 0 ? previousEngagedSessions / out.previousSessions : 0;
 
   out.topReferrers = (byReferrer.rows || [])
     .map((row) => ({ source: row.dimensionValues[0]?.value || '(direct)', sessions: Number(row.metricValues[0]?.value || 0) }))

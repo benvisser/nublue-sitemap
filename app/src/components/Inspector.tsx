@@ -3,7 +3,7 @@ import { BASE_URL } from '../data/sitemapTree';
 import { opportunityScore } from '../data/seoTypes';
 import { usePageSeo } from '../hooks/usePageSeo';
 import { formatDelta, formatNumber, formatPercent, formatSeconds } from '../lib/format';
-import { LinkIcon } from './LinkIcon';
+import { LinkIcon, RefreshIcon } from './LinkIcon';
 import { ScoreGauge } from './ScoreGauge';
 import { Ga4Icon, SearchConsoleIcon, SeRankingIcon } from './SourceIcons';
 
@@ -66,24 +66,39 @@ export function Inspector({ node, onClose, onLoaded }: InspectorProps) {
           <div className="inspector__title-row">
             <span className="inspector__dot" style={{ background: node.isNew ? 'var(--gold)' : 'var(--green)' }} />
             <span className="inspector__name">{node.name}</span>
+            <div className="inspector__title-actions">
+              {node.url && (
+                <a
+                  href={`${BASE_URL}${node.url}`}
+                  target="_blank"
+                  rel="noopener"
+                  className="inspector__icon-btn"
+                  title="Open live page"
+                  aria-label="Open live page"
+                >
+                  <LinkIcon size={13} />
+                </a>
+              )}
+              {status === 'ready' && row && !row.projected && (
+                <button
+                  type="button"
+                  className="inspector__icon-btn"
+                  onClick={() => refresh()}
+                  title="Refresh this page, bypassing the cache"
+                  aria-label="Refresh this page"
+                >
+                  <RefreshIcon size={13} />
+                </button>
+              )}
+            </div>
           </div>
           <span className="inspector__path">{node.url || '—'}</span>
-          {node.url && (
-            <a href={`${BASE_URL}${node.url}`} target="_blank" rel="noopener" className="inspector__open-link">
-              <LinkIcon size={13} /> Open live page
-            </a>
-          )}
-          {row && (
+          {row && (row.projected || !seRankingLive || !ga4Live || !gscLive) && (
             <div className="inspector__badges">
               {row.projected && <span className="badge badge--projected">Projected estimate</span>}
               {!seRankingLive && <span className="badge badge--pending">SE Ranking integration coming soon</span>}
               {!ga4Live && <span className="badge badge--pending">GA4 not connected yet</span>}
               {!gscLive && <span className="badge badge--pending">Search Console not connected yet</span>}
-              {status === 'ready' && !row.projected && (
-                <button type="button" className="inspector__refresh" onClick={() => refresh()} title="Force a fresh pull for this page, bypassing the cache">
-                  ↻ Refresh this page
-                </button>
-              )}
             </div>
           )}
         </div>
@@ -133,31 +148,39 @@ export function Inspector({ node, onClose, onLoaded }: InspectorProps) {
                     from search <DeltaTag current={row.organicTraffic} previous={row.previousOrganicTraffic} />
                   </span>
                 </div>
+                <div className="stat-tile">
+                  <span className="stat-tile__label">Avg. engaged time</span>
+                  <span className="stat-tile__value">{formatSeconds(row.avgEngagementSeconds)}</span>
+                  <span className="stat-tile__sub">per session, trailing 28d</span>
+                </div>
+                <div className="stat-tile">
+                  <span
+                    className="stat-tile__label"
+                    title="Share of sessions GA4 counted as 'engaged' (10s+, 2+ pageviews, or a conversion event). Organic traffic with a low engagement rate usually means the page isn't matching what people searched for, even if it ranks fine."
+                  >
+                    Engagement rate ⓘ
+                  </span>
+                  <span className="stat-tile__value">{formatPercent(row.engagementRate, 0)}</span>
+                  <span className="stat-tile__sub">
+                    of sessions <DeltaTag current={row.engagementRate} previous={row.previousEngagementRate} />
+                  </span>
+                </div>
               </div>
 
-              {(row.avgEngagementSeconds != null || row.topReferrers.length > 0) && (
-                <div className="score-row">
-                  <div>
-                    <h3 className="section-title">Engagement</h3>
-                    <p style={{ fontSize: 20, fontWeight: 700, color: 'var(--navy)', margin: '4px 0' }}>{formatSeconds(row.avgEngagementSeconds)}</p>
-                    <span className="gauge-row__label">avg. engaged time per session</span>
-                  </div>
-                  <div>
-                    <h3 className="section-title">Top referrers</h3>
-                    {row.topReferrers.length === 0 ? (
-                      <span className="gauge-row__label">No referral traffic, trailing 28d</span>
-                    ) : (
-                      <ul className="issue-list">
-                        {row.topReferrers.map((r) => (
-                          <li key={r.source}>
-                            {r.source} — {formatNumber(r.sessions)}
-                          </li>
-                        ))}
-                      </ul>
-                    )}
-                  </div>
-                </div>
-              )}
+              <div>
+                <h3 className="section-title">Top referrers</h3>
+                {row.topReferrers.length === 0 ? (
+                  <span className="gauge-row__label">No referral traffic, trailing 28d</span>
+                ) : (
+                  <ul className="issue-list">
+                    {row.topReferrers.map((r) => (
+                      <li key={r.source}>
+                        {r.source} — {formatNumber(r.sessions)}
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
             </SourceGroup>
           )}
 

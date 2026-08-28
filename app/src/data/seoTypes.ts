@@ -79,6 +79,11 @@ export interface PageSeoData {
   previousOrganicTraffic: number | null;
   /** Average engaged seconds per session on this page, trailing 28 days (GA4) */
   avgEngagementSeconds: number | null;
+  /** Share of sessions (0-1) GA4 counted as "engaged", current and previous
+   * 28-day period — low engagement on a page with real traffic is a signal
+   * the content isn't matching search intent even if it ranks fine. */
+  engagementRate: number | null;
+  previousEngagementRate: number | null;
   /** Top sources sending sessions to this page, trailing 28 days (GA4) */
   topReferrers: ReferrerRow[];
   /** Real measured Search Console performance, trailing 28 days */
