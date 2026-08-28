@@ -56,23 +56,88 @@ async function runReport(body: Record<string, unknown>): Promise<RunReportRespon
   return res.data;
 }
 
-/** Sessions for exactly one page path over the trailing `days` days —
- * filtered server-side by GA4, so this is cheap enough to call on every
- * page open instead of needing its own cache/TTL. */
-export async function getSessionsForPath(path: string, days = 28): Promise<number> {
-  const data = await runReport({
-    dateRanges: [{ startDate: `${days}daysAgo`, endDate: 'today' }],
-    dimensions: [{ name: 'pagePath' }],
-    metrics: [{ name: 'sessions' }],
-    dimensionFilter: {
-      filter: { fieldName: 'pagePath', stringFilter: { matchType: 'EXACT', value: path } },
-    },
-    limit: 10,
-  });
+function pageFilter(path: string) {
+  return { filter: { fieldName: 'pagePath', stringFilter: { matchType: 'EXACT' as const, value: path } } };
+}
 
-  let total = 0;
-  for (const row of data.rows || []) {
-    total += Number(row.metricValues[0]?.value || 0);
+export interface ReferrerRow {
+  source: string;
+  sessions: number;
+}
+
+export interface PageTraffic {
+  sessions: number;
+  previousSessions: number;
+  organicSessions: number;
+  previousOrganicSessions: number;
+  /** Average time (seconds) users engaged with the page per session,
+   * current period — GA4's userEngagementDuration / sessions. */
+  avgEngagementSeconds: number;
+  /** Top sources sending sessions to this page, current period,
+   * highest first. */
+  topReferrers: ReferrerRow[];
+}
+
+const EMPTY_TRAFFIC: PageTraffic = {
+  sessions: 0,
+  previousSessions: 0,
+  organicSessions: 0,
+  previousOrganicSessions: 0,
+  avgEngagementSeconds: 0,
+  topReferrers: [],
+};
+
+/** This page's traffic for the trailing `days` days plus the equal-length
+ * period before that (for a period-over-period comparison), split out by
+ * organic vs all-channel, plus its top referring sources. Two runReport
+ * calls, both filtered server-side to exactly this page path — cheap
+ * enough to run fresh on every page open, no caching needed (unlike SE
+ * Ranking's bulk-only API — see seRankingProjectPull.ts). */
+export async function getPageTraffic(path: string, days = 28): Promise<PageTraffic> {
+  const [byPeriod, byReferrer] = await Promise.all([
+    runReport({
+      dateRanges: [
+        { name: 'current', startDate: `${days}daysAgo`, endDate: 'today' },
+        { name: 'previous', startDate: `${days * 2}daysAgo`, endDate: `${days + 1}daysAgo` },
+      ],
+      dimensions: [{ name: 'dateRange' }, { name: 'sessionDefaultChannelGroup' }],
+      metrics: [{ name: 'sessions' }, { name: 'userEngagementDuration' }],
+      dimensionFilter: pageFilter(path),
+      limit: 50,
+    }),
+    runReport({
+      dateRanges: [{ startDate: `${days}daysAgo`, endDate: 'today' }],
+      dimensions: [{ name: 'sessionSource' }],
+      metrics: [{ name: 'sessions' }],
+      dimensionFilter: pageFilter(path),
+      orderBys: [{ metric: { metricName: 'sessions' }, desc: true }],
+      limit: 5,
+    }),
+  ]);
+
+  const out = { ...EMPTY_TRAFFIC };
+  let currentEngagementSeconds = 0;
+  for (const row of byPeriod.rows || []) {
+    const period = row.dimensionValues[0]?.value; // 'current' | 'previous'
+    const channel = row.dimensionValues[1]?.value ?? '';
+    const sessions = Number(row.metricValues[0]?.value || 0);
+    const engagement = Number(row.metricValues[1]?.value || 0);
+    const isOrganic = channel === 'Organic Search';
+
+    if (period === 'current') {
+      out.sessions += sessions;
+      currentEngagementSeconds += engagement;
+      if (isOrganic) out.organicSessions += sessions;
+    } else if (period === 'previous') {
+      out.previousSessions += sessions;
+      if (isOrganic) out.previousOrganicSessions += sessions;
+    }
   }
-  return total;
+  out.avgEngagementSeconds = out.sessions > 0 ? Math.round(currentEngagementSeconds / out.sessions) : 0;
+
+  out.topReferrers = (byReferrer.rows || [])
+    .map((row) => ({ source: row.dimensionValues[0]?.value || '(direct)', sessions: Number(row.metricValues[0]?.value || 0) }))
+    .filter((r) => r.sessions > 0);
+
+  return out;
 }

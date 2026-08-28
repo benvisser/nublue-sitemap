@@ -1,8 +1,10 @@
 // Per-page SEO row computation — called by get-page-seo.mts for exactly
-// one path at a time. See seRankingProjectPull.ts and ga4Client.ts for
-// where keywordRows/auditRows/actualTraffic actually come from; this file
-// only does the math once you have them.
+// one path at a time. See seRankingProjectPull.ts, ga4Client.ts, and
+// gscClient.ts for where keywordRows/auditRows/traffic/search performance
+// actually come from; this file only does the math once you have them.
 import { computeLocalSeoScore, type KeywordQuery, type PageSeoData } from '../../src/data/seoTypes.js';
+import type { PageTraffic } from './ga4Client.js';
+import type { PageSearchPerformance } from './gscClient.js';
 import type { SeRankingAuditPage, SeRankingKeywordRow } from './seRankingClient.js';
 
 const PROJECTION_FACTOR = 0.15; // future page starts at ~15% of its parent's potential traffic
@@ -25,24 +27,37 @@ function recommendationsFor(row: PageSeoData): string[] {
 }
 
 /** Builds the full row for one real (non-projected) page, given the
- * project-wide SE Ranking pull (filtered here to this path) and this
- * page's own GA4 session count. `seRankingOk` reflects whether the
- * project pull actually succeeded recently — with it false, keywordRows/
- * auditRows are empty by construction (see seRankingProjectPull.ts), so
- * recommendations are skipped rather than emitting a misleading "no
- * urgent issues" for a page we simply have no data on. */
+ * project-wide SE Ranking pull (filtered here to this path), this page's
+ * GA4 traffic, and its Search Console performance. `seRankingOk` reflects
+ * whether the project pull actually succeeded recently — with it false,
+ * keywordRows/auditRows are empty by construction (see
+ * seRankingProjectPull.ts), so recommendations are skipped rather than
+ * emitting a misleading "no urgent issues" for a page we simply have no
+ * data on. `traffic`/`search` are null when their source failed for this
+ * request (see get-page-seo.mts). */
 export function computePageRow(
   path: string,
   keywordRows: SeRankingKeywordRow[],
   auditRows: SeRankingAuditPage[],
-  actualTraffic: number | null,
+  traffic: PageTraffic | null,
+  search: PageSearchPerformance | null,
   seRankingOk: boolean,
 ): PageSeoData {
   const row: PageSeoData = {
     path,
     totalSearchVolume: 0,
     potentialTraffic: 0,
-    actualTraffic,
+    actualTraffic: traffic?.sessions ?? null,
+    previousTraffic: traffic?.previousSessions ?? null,
+    organicTraffic: traffic?.organicSessions ?? null,
+    previousOrganicTraffic: traffic?.previousOrganicSessions ?? null,
+    avgEngagementSeconds: traffic?.avgEngagementSeconds ?? null,
+    topReferrers: traffic?.topReferrers ?? [],
+    searchClicks: search?.clicks ?? null,
+    searchImpressions: search?.impressions ?? null,
+    searchCtr: search?.ctr ?? null,
+    avgSearchPosition: search?.position ?? null,
+    topSearchQueries: search?.topQueries ?? [],
     contentScore: 0,
     localSeoScore: 0,
     keywordCount: 0,
@@ -77,7 +92,7 @@ export function computePageRow(
 }
 
 /** A future-state page that doesn't exist on the live site yet — never
- * pulled from SE Ranking/GA4, just a rough estimate from its real parent
+ * pulled from any source, just a rough estimate from its real parent
  * page's numbers. */
 export function computeProjectedRow(path: string, parent: PageSeoData | null): PageSeoData {
   return {
@@ -85,6 +100,16 @@ export function computeProjectedRow(path: string, parent: PageSeoData | null): P
     totalSearchVolume: parent ? Math.round(parent.totalSearchVolume * PROJECTION_FACTOR) : 0,
     potentialTraffic: parent ? Math.round(parent.potentialTraffic * PROJECTION_FACTOR) : 0,
     actualTraffic: null,
+    previousTraffic: null,
+    organicTraffic: null,
+    previousOrganicTraffic: null,
+    avgEngagementSeconds: null,
+    topReferrers: [],
+    searchClicks: null,
+    searchImpressions: null,
+    searchCtr: null,
+    avgSearchPosition: null,
+    topSearchQueries: [],
     contentScore: 0,
     localSeoScore: 0,
     keywordCount: 0,

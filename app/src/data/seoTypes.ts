@@ -11,6 +11,24 @@ export interface KeywordQuery {
   position: number | null;
 }
 
+export interface ReferrerRow {
+  source: string;
+  sessions: number;
+}
+
+/** A query Google Search Console actually recorded impressions/clicks for
+ * on this page — real measured performance, distinct from SE Ranking's
+ * topQueries (which carries search *volume*, something GSC doesn't
+ * report). The two are complementary: SE Ranking says what's worth
+ * targeting, GSC says what's actually happening in search. */
+export interface SearchQuery {
+  query: string;
+  clicks: number;
+  impressions: number;
+  ctr: number;
+  position: number;
+}
+
 export interface PageSeoData {
   /** URL path key, matches PageNode.url exactly, e.g. "/electrical/panels/" */
   path: string;
@@ -24,6 +42,25 @@ export interface PageSeoData {
   potentialTraffic: number;
   /** Measured sessions landing on this path over the trailing 28 days (GA4) */
   actualTraffic: number | null;
+  /** Same, trailing 28 days before that — for the period-over-period
+   * comparison shown next to actualTraffic. */
+  previousTraffic: number | null;
+  /** Sessions from organic search specifically (GA4's "Organic Search"
+   * channel group), current and previous period — the slice of
+   * actualTraffic actually attributable to SEO rather than all traffic
+   * sources. */
+  organicTraffic: number | null;
+  previousOrganicTraffic: number | null;
+  /** Average engaged seconds per session on this page, trailing 28 days (GA4) */
+  avgEngagementSeconds: number | null;
+  /** Top sources sending sessions to this page, trailing 28 days (GA4) */
+  topReferrers: ReferrerRow[];
+  /** Real measured Search Console performance, trailing 28 days */
+  searchClicks: number | null;
+  searchImpressions: number | null;
+  searchCtr: number | null;
+  avgSearchPosition: number | null;
+  topSearchQueries: SearchQuery[];
   /** Website/page audit content score, 0-100 (SE Ranking) */
   contentScore: number;
   /**
@@ -50,10 +87,16 @@ export interface PageSeoData {
   projected: boolean;
 }
 
+export interface SourceStatus {
+  seRanking: boolean;
+  ga4: boolean;
+  gsc: boolean;
+}
+
 export interface SeoSnapshot {
   /** ISO timestamp of when this snapshot was generated */
   generatedAt: string;
-  sources: { seRanking: boolean; ga4: boolean };
+  sources: SourceStatus;
   pages: Record<string, PageSeoData>;
 }
 

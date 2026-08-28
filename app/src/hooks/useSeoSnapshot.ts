@@ -3,7 +3,7 @@ import type { SeoSnapshot } from '../data/seoTypes';
 
 const EMPTY_SNAPSHOT: SeoSnapshot = {
   generatedAt: '',
-  sources: { seRanking: false, ga4: false },
+  sources: { seRanking: false, ga4: false, gsc: false },
   pages: {},
 };
 

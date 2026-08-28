@@ -1,23 +1,22 @@
-// SE Ranking's real public "Data API" client — confirmed against their
-// OpenAPI spec (github.com/seranking/openapi, data-api.yaml) after the
-// original guessed endpoints (api4.seranking.com, Authorization header,
-// a /projects/{id}/keywords path) all 400'd for real. Two corrections
-// that mattered:
-//   - Base URL is api.seranking.com (not api4), under /v1.
-//   - Auth is an `apikey` QUERY PARAMETER, not an Authorization header.
-// There's no "project ID" for these endpoints — /domain/keywords works
-// directly off the domain name, and Website Audit results come from an
-// audit run's own id, discovered via /audit/list (see getPageAudit).
+// SE Ranking client. This product has (at least) two separate API
+// surfaces with DIFFERENT auth mechanisms — confirmed the hard way, by
+// finding the real docs for each rather than guessing:
 //
-// ⚠️ Response body schemas are NOT specified in SE Ranking's own OpenAPI
-// doc (both endpoints just declare `content: application/json: {}`), so
-// the field-name guesses below (keyword/position/volume/url,
-// score/issues) are our best read of typical REST conventions, not
-// confirmed. If numbers still look wrong once this is live, check
-// Netlify's function logs — getKeywordPositions/getPageAudit log the raw
-// response on an unexpected shape — and adjust the mapping here; this
-// file is the one place that touches the wire.
+//  1. "Data API" (github.com/seranking/openapi, data-api.yaml) — Domain
+//     Analysis, Backlinks, Keyword Research, etc. Base api.seranking.com/v1,
+//     auth is an `apikey` QUERY PARAMETER. getKeywordPositions() uses this.
+//
+//  2. "Website Audit" (api.seranking.com/v1/project-management/audits) —
+//     the "Crawled pages" data behind SE Ranking's Website Audit tool.
+//     Base .../v1/project-management/audits, auth is an
+//     `Authorization: Token API_KEY` HEADER — different from #1. Confirmed
+//     against the real published docs (not the OpenAPI spec, which doesn't
+//     cover this product). getPageAudit() uses this.
+//
+// Both reuse the same SERANKING_API_KEY value; only the auth transport
+// differs per endpoint.
 const BASE_URL = Netlify.env.get('SERANKING_API_BASE_URL') || 'https://api.seranking.com/v1';
+const AUDIT_BASE_URL = Netlify.env.get('SERANKING_AUDIT_API_BASE_URL') || 'https://api.seranking.com/v1/project-management/audits';
 const DOMAIN = 'callnublue.com';
 
 function apiKey(): string {
@@ -26,6 +25,7 @@ function apiKey(): string {
   return key;
 }
 
+/** Data API — auth via `apikey` query param. */
 async function get<T>(path: string, params: Record<string, string | number> = {}): Promise<T> {
   const url = new URL(BASE_URL + path);
   url.searchParams.set('apikey', apiKey());
@@ -33,6 +33,18 @@ async function get<T>(path: string, params: Record<string, string | number> = {}
   const res = await fetch(url);
   if (!res.ok) {
     throw new Error(`SE Ranking ${path} -> ${res.status} ${await res.text().catch(() => '')}`);
+  }
+  return res.json() as Promise<T>;
+}
+
+/** Website Audit API — auth via `Authorization: Token` header, and the
+ * base URL already includes the full /project-management/audits prefix. */
+async function getAudit<T>(path: string, params: Record<string, string | number> = {}): Promise<T> {
+  const url = new URL(AUDIT_BASE_URL + path);
+  Object.entries(params).forEach(([k, v]) => url.searchParams.set(k, String(v)));
+  const res = await fetch(url, { headers: { Authorization: `Token ${apiKey()}` } });
+  if (!res.ok) {
+    throw new Error(`SE Ranking audit ${path} -> ${res.status} ${await res.text().catch(() => '')}`);
   }
   return res.json() as Promise<T>;
 }
@@ -72,32 +84,140 @@ export async function getKeywordPositions(): Promise<SeRankingKeywordRow[]> {
   }));
 }
 
-/** ⚠️ UNCONFIRMED — `/audit/list` returned a bare nginx 401 (not a JSON
- * error from SE Ranking's app), and a direct search of their published
- * OpenAPI spec found no "/v1/audit/list" path at all — an earlier read of
- * that spec inferred this endpoint from a category description, not a
- * real path definition. Website Audit may not be part of this public API,
- * may need a different auth scheme, or may need a differently-shaped
- * request; unverified for now. Failing here is non-fatal by design (see
- * seRankingProjectPull.ts) — keyword/position data still comes through
- * independently, and content score/issues just read empty until this is
- * sorted out. If your SE Ranking plan does expose Website Audit some
- * other way, this is the one function to fix. */
-export async function getPageAudit(): Promise<SeRankingAuditPage[]> {
-  const list = await get<{ audits?: Array<Record<string, unknown>> } | Array<Record<string, unknown>>>('/audit/list');
-  const audits = Array.isArray(list) ? list : list.audits || [];
-  const match = audits.find((a) => String(a.domain ?? a.site ?? a.url ?? '').includes(DOMAIN));
-  if (!match) {
-    console.log('[seRankingClient] getPageAudit: no audit found for', DOMAIN, '— has a Website Audit ever been run for this site in SE Ranking?');
-    return [];
-  }
-  const auditId = String(match.id ?? match.audit_id ?? '');
+interface AuditListItem {
+  id: number | string;
+  url: string;
+  status?: string;
+  stats?: { score?: number; errors?: number; warnings?: number; notices?: number; crawled?: number };
+}
 
-  const data = await get<{ pages?: Array<Record<string, unknown>> } | Array<Record<string, unknown>>>(`/audit/${auditId}/pages`);
-  const rows = Array.isArray(data) ? data : data.pages || [];
-  return rows.map((p) => ({
-    url: String(p.url ?? p.page_url ?? ''),
-    score: Number(p.score ?? p.content_score ?? p.seo_score ?? 0),
-    issues: Array.isArray(p.issues) ? p.issues.map(String) : [],
+interface AuditListResponse {
+  items: AuditListItem[];
+  total: number;
+}
+
+interface AuditPageItem {
+  url: string;
+  status?: number | string;
+  title?: string;
+  description?: string;
+  h1?: string;
+  words_count?: number;
+  issues?: unknown;
+  errors?: unknown;
+  warnings?: unknown;
+  notices?: unknown;
+  canonical_url?: string;
+  indexable_status?: string;
+  title_duplicate?: boolean;
+  description_duplicate?: boolean;
+  h1_duplicate?: boolean;
+  traffic_forecast?: number;
+  num_keywords?: number;
+}
+
+interface AuditPagesResponse {
+  total: number;
+  items: AuditPageItem[];
+}
+
+/** Finds the Website Audit already set up for callnublue.com in SE
+ * Ranking (an audit has to have been created/run in their UI or API
+ * first — this just locates it by domain). Returns null if none exists
+ * yet, which is non-fatal — see seRankingProjectPull.ts. */
+async function findAudit(): Promise<AuditListItem | null> {
+  const data = await getAudit<AuditListResponse>('', { limit: 50, search: DOMAIN });
+  const items = data.items || [];
+  const match = items.find((a) => String(a.url ?? '').includes(DOMAIN));
+  if (!match) {
+    console.log('[seRankingClient] findAudit: no audit found for', DOMAIN, `(${items.length} audits returned by search) — has a Website Audit been created for this site in SE Ranking?`);
+    return null;
+  }
+  return match;
+}
+
+/** Pages a Website Audit's full crawled-page list (GET
+ * /project-management/audits/pages?audit_id=). */
+async function fetchAllAuditPages(auditId: number | string): Promise<AuditPageItem[]> {
+  const pageSize = 250;
+  const items: AuditPageItem[] = [];
+  let offset = 0;
+  for (;;) {
+    const data = await getAudit<AuditPagesResponse>('/pages', { audit_id: auditId, limit: pageSize, offset });
+    const batch = data.items || [];
+    items.push(...batch);
+    offset += batch.length;
+    if (batch.length === 0 || offset >= data.total) break;
+  }
+  return items;
+}
+
+/** Turns a full crawled URL into the site-relative path the rest of the
+ * app keys pages by (e.g. "https://callnublue.com/electrical/" -> "/electrical/"). */
+function toRelativePath(rawUrl: string): string {
+  try {
+    return new URL(rawUrl).pathname;
+  } catch {
+    return rawUrl;
+  }
+}
+
+function issueCount(v: unknown): number {
+  if (Array.isArray(v)) return v.length;
+  const n = Number(v ?? 0);
+  return Number.isFinite(n) ? n : 0;
+}
+
+/** SE Ranking's audit doesn't hand back a single 0-100 "content score" per
+ * page — this derives one from real per-page issue counts so the gauge in
+ * the UI still means something: start at 100, dock more for errors than
+ * warnings than notices, floor at 0. */
+function scoreFor(page: AuditPageItem): number {
+  const errors = issueCount(page.errors);
+  const warnings = issueCount(page.warnings);
+  const notices = issueCount(page.notices);
+  const score = 100 - errors * 15 - warnings * 5 - notices * 1;
+  return Math.max(0, Math.min(100, Math.round(score)));
+}
+
+/** Human-readable issue list derived from the real per-page audit fields
+ * (title/description/H1 duplicates, thin content, non-indexable status,
+ * HTTP errors) plus whatever SE Ranking's own `issues` array names. */
+function issuesFor(page: AuditPageItem): string[] {
+  const issues: string[] = [];
+  const status = Number(page.status);
+  if (Number.isFinite(status) && status >= 400) issues.push(`HTTP ${status} error`);
+  if (page.indexable_status && !/^indexable$/i.test(page.indexable_status)) issues.push(`Not indexable (${page.indexable_status})`);
+  if (!page.title) issues.push('Missing title tag');
+  else if (page.title_duplicate) issues.push('Duplicate title tag');
+  if (!page.description) issues.push('Missing meta description');
+  else if (page.description_duplicate) issues.push('Duplicate meta description');
+  if (!page.h1) issues.push('Missing H1');
+  else if (page.h1_duplicate) issues.push('Duplicate H1');
+  if (page.words_count != null && page.words_count < 300) issues.push(`Thin content (${page.words_count} words)`);
+  if (Array.isArray(page.issues)) {
+    for (const issue of page.issues) {
+      const label = String(issue);
+      if (label && !issues.includes(label)) issues.push(label);
+    }
+  }
+  return issues;
+}
+
+/** Crawled-page data from SE Ranking's Website Audit tool — the "Crawled
+ * pages" section of the product. Failing here (no audit set up yet, API
+ * hiccup) is non-fatal by design (see seRankingProjectPull.ts): keyword
+ * data still comes through independently, and content score/issues just
+ * read empty until an audit exists. */
+export async function getPageAudit(): Promise<SeRankingAuditPage[]> {
+  const audit = await findAudit();
+  if (!audit) return [];
+
+  const pages = await fetchAllAuditPages(audit.id);
+  if (pages.length === 0) console.log('[seRankingClient] getPageAudit: audit', audit.id, 'returned 0 crawled pages');
+  return pages.map((p) => ({
+    url: toRelativePath(p.url),
+    score: scoreFor(p),
+    issues: issuesFor(p),
   }));
 }

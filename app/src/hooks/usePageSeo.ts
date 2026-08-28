@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useState } from 'react';
-import type { PageSeoData } from '../data/seoTypes';
+import type { PageSeoData, SourceStatus } from '../data/seoTypes';
 
 interface PageSeoResponse {
   page: PageSeoData;
-  sources: { seRanking: boolean; ga4: boolean };
+  sources: SourceStatus;
   fetchedAt: string;
 }
 

@@ -2,7 +2,7 @@ import type { PageNode } from '../data/sitemapTree';
 import { BASE_URL } from '../data/sitemapTree';
 import { opportunityScore } from '../data/seoTypes';
 import { usePageSeo } from '../hooks/usePageSeo';
-import { formatNumber } from '../lib/format';
+import { formatDelta, formatNumber, formatPercent, formatSeconds } from '../lib/format';
 import { LinkIcon } from './LinkIcon';
 import { ScoreGauge } from './ScoreGauge';
 
@@ -14,14 +14,21 @@ interface InspectorProps {
 
 /** A stat tile that isn't backed by a connected source yet — grayed with a
  * "coming soon" note instead of a fabricated or misleading number. */
-function PendingTile({ label }: { label: string }) {
+function PendingTile({ label, note }: { label: string; note: string }) {
   return (
     <div className="stat-tile stat-tile--pending">
       <span className="stat-tile__label">{label}</span>
       <span className="stat-tile__value">—</span>
-      <span className="stat-tile__sub">SE Ranking integration coming soon</span>
+      <span className="stat-tile__sub">{note}</span>
     </div>
   );
+}
+
+function DeltaTag({ current, previous }: { current: number | null; previous: number | null }) {
+  const delta = formatDelta(current, previous);
+  if (!delta) return null;
+  const isUp = delta.startsWith('+');
+  return <span className={`delta-tag ${isUp ? 'delta-tag--up' : 'delta-tag--down'}`}>{delta} vs prior 28d</span>;
 }
 
 export function Inspector({ node, onClose, onLoaded }: InspectorProps) {
@@ -29,6 +36,7 @@ export function Inspector({ node, onClose, onLoaded }: InspectorProps) {
   const row = result?.page;
   const seRankingLive = Boolean(result?.sources.seRanking);
   const ga4Live = Boolean(result?.sources.ga4);
+  const gscLive = Boolean(result?.sources.gsc);
 
   return (
     <>
@@ -53,6 +61,7 @@ export function Inspector({ node, onClose, onLoaded }: InspectorProps) {
               {row.projected && <span className="badge badge--projected">Projected estimate</span>}
               {!seRankingLive && <span className="badge badge--pending">SE Ranking integration coming soon</span>}
               {!ga4Live && <span className="badge badge--pending">GA4 not connected yet</span>}
+              {!gscLive && <span className="badge badge--pending">Search Console not connected yet</span>}
               {status === 'ready' && !row.projected && (
                 <button type="button" className="inspector__refresh" onClick={() => refresh()} title="Force a fresh pull for this page, bypassing the cache">
                   ↻ Refresh this page
@@ -73,7 +82,10 @@ export function Inspector({ node, onClose, onLoaded }: InspectorProps) {
 
           {status === 'error' && (
             <p style={{ fontSize: 13.5, color: 'var(--text-body)' }}>
-              Couldn't load data for this page. <button type="button" className="inspector__refresh" onClick={() => refresh(false)}>Try again</button>
+              Couldn't load data for this page.{' '}
+              <button type="button" className="inspector__refresh" onClick={() => refresh(false)}>
+                Try again
+              </button>
             </p>
           )}
 
@@ -101,15 +113,33 @@ export function Inspector({ node, onClose, onLoaded }: InspectorProps) {
                   </>
                 ) : (
                   <>
-                    <PendingTile label="Potential search volume" />
-                    <PendingTile label="Potential traffic" />
+                    <PendingTile label="Potential search volume" note="SE Ranking integration coming soon" />
+                    <PendingTile label="Potential traffic" note="SE Ranking integration coming soon" />
                   </>
                 )}
-                <div className="stat-tile">
-                  <span className="stat-tile__label">Actual traffic</span>
-                  <span className="stat-tile__value">{ga4Live && row.actualTraffic != null ? formatNumber(row.actualTraffic) : '—'}</span>
-                  <span className="stat-tile__sub">{ga4Live ? 'sessions, trailing 28d (GA4)' : 'GA4 not connected yet'}</span>
-                </div>
+                {ga4Live ? (
+                  <>
+                    <div className="stat-tile">
+                      <span className="stat-tile__label">Actual traffic</span>
+                      <span className="stat-tile__value">{formatNumber(row.actualTraffic)}</span>
+                      <span className="stat-tile__sub">
+                        sessions, trailing 28d <DeltaTag current={row.actualTraffic} previous={row.previousTraffic} />
+                      </span>
+                    </div>
+                    <div className="stat-tile">
+                      <span className="stat-tile__label">Organic traffic</span>
+                      <span className="stat-tile__value">{formatNumber(row.organicTraffic)}</span>
+                      <span className="stat-tile__sub">
+                        from search <DeltaTag current={row.organicTraffic} previous={row.previousOrganicTraffic} />
+                      </span>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <PendingTile label="Actual traffic" note="GA4 not connected yet" />
+                    <PendingTile label="Organic traffic" note="GA4 not connected yet" />
+                  </>
+                )}
                 {seRankingLive ? (
                   <>
                     <div className="stat-tile">
@@ -125,11 +155,35 @@ export function Inspector({ node, onClose, onLoaded }: InspectorProps) {
                   </>
                 ) : (
                   <>
-                    <PendingTile label="Keywords tracked" />
-                    <PendingTile label="Opportunity" />
+                    <PendingTile label="Keywords tracked" note="SE Ranking integration coming soon" />
+                    <PendingTile label="Opportunity" note="SE Ranking integration coming soon" />
                   </>
                 )}
               </div>
+
+              {ga4Live && (row.avgEngagementSeconds != null || row.topReferrers.length > 0) && (
+                <div className="score-row">
+                  <div>
+                    <h3 className="section-title">Engagement</h3>
+                    <p style={{ fontSize: 20, fontWeight: 700, color: 'var(--navy)', margin: '4px 0' }}>{formatSeconds(row.avgEngagementSeconds)}</p>
+                    <span className="gauge-row__label">avg. engaged time per session</span>
+                  </div>
+                  <div>
+                    <h3 className="section-title">Top referrers</h3>
+                    {row.topReferrers.length === 0 ? (
+                      <span className="gauge-row__label">No referral traffic, trailing 28d</span>
+                    ) : (
+                      <ul className="issue-list">
+                        {row.topReferrers.map((r) => (
+                          <li key={r.source}>
+                            {r.source} — {formatNumber(r.sessions)}
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
+                </div>
+              )}
 
               {seRankingLive ? (
                 <div className="score-row">
@@ -195,6 +249,58 @@ export function Inspector({ node, onClose, onLoaded }: InspectorProps) {
                 )
               ) : (
                 <div className="pending-note">Tracked keywords &amp; current rank — SE Ranking integration coming soon.</div>
+              )}
+
+              {gscLive ? (
+                <div>
+                  <h3 className="section-title" title="Real measured Google Search Console performance — clicks, impressions, CTR, and average position as Google actually recorded them, trailing 28 days.">
+                    Search Console performance ⓘ
+                  </h3>
+                  <div className="stat-tiles" style={{ marginBottom: 10 }}>
+                    <div className="stat-tile">
+                      <span className="stat-tile__label">Clicks</span>
+                      <span className="stat-tile__value">{formatNumber(row.searchClicks)}</span>
+                    </div>
+                    <div className="stat-tile">
+                      <span className="stat-tile__label">Impressions</span>
+                      <span className="stat-tile__value">{formatNumber(row.searchImpressions)}</span>
+                    </div>
+                    <div className="stat-tile">
+                      <span className="stat-tile__label">CTR</span>
+                      <span className="stat-tile__value">{formatPercent(row.searchCtr)}</span>
+                    </div>
+                    <div className="stat-tile">
+                      <span className="stat-tile__label">Avg. position</span>
+                      <span className="stat-tile__value">{row.avgSearchPosition ?? '—'}</span>
+                    </div>
+                  </div>
+                  {row.topSearchQueries.length > 0 && (
+                    <div className="query-table-scroll">
+                      <table className="query-table">
+                        <thead>
+                          <tr>
+                            <th>Query</th>
+                            <th className="num">Clicks</th>
+                            <th className="num">Impr.</th>
+                            <th className="num">Position</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {row.topSearchQueries.map((q) => (
+                            <tr key={q.query}>
+                              <td>{q.query}</td>
+                              <td className="num">{formatNumber(q.clicks)}</td>
+                              <td className="num">{formatNumber(q.impressions)}</td>
+                              <td className="num">{q.position}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div className="pending-note">Search Console performance — not connected yet.</div>
               )}
 
               {seRankingLive && row.recommendations.length > 0 && (

@@ -652,6 +652,15 @@ button {
   font-size: 11px;
   color: rgba(21, 26, 66, 0.55);
 }
+.delta-tag {
+  font-weight: 700;
+}
+.delta-tag--up {
+  color: var(--green);
+}
+.delta-tag--down {
+  color: var(--red);
+}
 .stat-tile--pending {
   background: var(--gray-100);
   opacity: 0.6;

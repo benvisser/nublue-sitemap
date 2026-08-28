@@ -8,10 +8,11 @@
 import { listCachedPages } from '../lib/pageSeoCache.js';
 import { peekProjectPull } from '../lib/seRankingProjectPull.js';
 import { peekGa4Status } from '../lib/ga4Status.js';
+import { peekGscStatus } from '../lib/gscStatus.js';
 
 export default async () => {
   const cachedPages = await listCachedPages();
-  const [seRanking, ga4] = await Promise.all([peekProjectPull(), peekGa4Status()]);
+  const [seRanking, ga4, gsc] = await Promise.all([peekProjectPull(), peekGa4Status(), peekGscStatus()]);
 
   const pages: Record<string, unknown> = {};
   let generatedAt = '';
@@ -25,6 +26,7 @@ export default async () => {
     sources: {
       seRanking: Boolean(seRanking?.ok),
       ga4: Boolean(ga4?.ok),
+      gsc: Boolean(gsc?.ok),
     },
     pages,
   };
