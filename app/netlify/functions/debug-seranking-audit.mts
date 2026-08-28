@@ -22,7 +22,7 @@
 // fetched and searched for `path`, returning both the raw SE Ranking
 // record (every field, unmapped) and our current mapped interpretation
 // of it, side by side.
-import { fetchAllAuditPages, findAudit, getAuditById, listAllAudits, toRelativePath } from '../lib/seRankingClient.js';
+import { fetchAllAuditPages, findAudit, getAuditById, listAllAudits, rawAuditRequest, toRelativePath } from '../lib/seRankingClient.js';
 
 function json(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body, null, 2), { status, headers: { 'content-type': 'application/json' } });
@@ -76,6 +76,25 @@ export default async (req: Request) => {
       const match = pages.find((p) => toRelativePath(String((p as { url?: unknown }).url ?? '')) === path);
       report.matchedRawPage = match ?? null;
       report.matchedPageAllFieldNames = match ? Object.keys(match) : [];
+
+      // The /pages list only gives issue COUNTS (errors/warnings/notices),
+      // not a free-text list of what those issues actually are. Probing a
+      // few plausible per-URL/per-issue endpoint shapes here — using the
+      // real audit id and this page's real numeric id — to see if SE
+      // Ranking exposes actual issue descriptions ("recommendations")
+      // anywhere, rather than guessing blind and redeploying repeatedly.
+      const matchId = (match as { id?: unknown } | undefined)?.id;
+      const fullUrl = `https://callnublue.com${path}`;
+      const candidates: Array<{ label: string; path: string; params: Record<string, string | number> }> = [
+        { label: 'issues-by-url (url param)', path: '/issues-by-url', params: { audit_id: resolvedAudit.id, url: fullUrl } },
+        { label: 'issues-by-url (page_id param)', path: '/issues-by-url', params: { audit_id: resolvedAudit.id, page_id: String(matchId ?? '') } },
+        { label: 'pages-by-issue (list, no filter)', path: '/pages-by-issue', params: { audit_id: resolvedAudit.id } },
+        { label: 'page issues via /pages/{id}/issues', path: `/pages/${matchId}/issues`, params: { audit_id: resolvedAudit.id } },
+      ];
+      report.endpointProbes = {};
+      for (const c of candidates) {
+        (report.endpointProbes as Record<string, unknown>)[c.label] = await rawAuditRequest(c.path, c.params);
+      }
     } catch (err) {
       report.pagesFetchError = String(err);
     }

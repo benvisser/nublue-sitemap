@@ -49,6 +49,22 @@ async function getAudit<T>(path: string, params: Record<string, string | number>
   return res.json() as Promise<T>;
 }
 
+/** Same auth/base as getAudit(), but never throws and returns the raw
+ * status + body text regardless of outcome — for debug-seranking-audit.mts
+ * to probe candidate endpoint paths we're not sure exist yet, without a
+ * failed guess blowing up the whole request. */
+export async function rawAuditRequest(path: string, params: Record<string, string | number> = {}): Promise<{ status: number; body: string }> {
+  const url = new URL(AUDIT_BASE_URL + path);
+  Object.entries(params).forEach(([k, v]) => url.searchParams.set(k, String(v)));
+  try {
+    const res = await fetch(url, { headers: { Authorization: `Token ${apiKey()}` } });
+    const body = await res.text().catch(() => '');
+    return { status: res.status, body: body.slice(0, 4000) };
+  } catch (err) {
+    return { status: 0, body: String(err) };
+  }
+}
+
 export interface SeRankingKeywordRow {
   keyword: string;
   volume: number;
@@ -121,9 +137,11 @@ export interface AuditPageItem {
   notices?: unknown;
   canonical_url?: string;
   indexable_status?: string;
-  title_duplicate?: boolean;
-  description_duplicate?: boolean;
-  h1_duplicate?: boolean;
+  // These come back as the strings "0"/"1", not real booleans — see
+  // isTruthyFlag(). Typed loosely here rather than claiming `boolean`.
+  title_duplicate?: string | boolean | number;
+  description_duplicate?: string | boolean | number;
+  h1_duplicate?: string | boolean | number;
   traffic_forecast?: number;
   num_keywords?: number;
   inlinks?: number;
@@ -205,6 +223,19 @@ function issueCount(v: unknown): number {
   return Number.isFinite(n) ? n : 0;
 }
 
+/** SE Ranking's Website Audit API returns every field as a string,
+ * booleans included — confirmed against a real response:
+ * `"title_duplicate": "0"`. A bare `if (page.title_duplicate)` check
+ * treats the string "0" as truthy (only "" is falsy in JS), so it was
+ * flagging every page as a duplicate regardless of the real value. This
+ * normalizes "0"/"1"/real booleans/numbers alike. */
+function isTruthyFlag(v: unknown): boolean {
+  if (typeof v === 'boolean') return v;
+  if (typeof v === 'number') return v !== 0;
+  if (typeof v === 'string') return v !== '' && v !== '0' && v.toLowerCase() !== 'false';
+  return Boolean(v);
+}
+
 /** SE Ranking's audit doesn't hand back a single 0-100 "content score" per
  * page — this derives one from real per-page issue counts so the gauge in
  * the UI still means something: start at 100, dock more for errors than
@@ -233,11 +264,11 @@ function issuesFor(page: AuditPageItem): string[] {
     issues.push(`Not indexable (${page.indexable_status})`);
   }
   if (!page.title) issues.push('Missing title tag');
-  else if (page.title_duplicate) issues.push('Duplicate title tag');
+  else if (isTruthyFlag(page.title_duplicate)) issues.push('Duplicate title tag');
   if (!page.description) issues.push('Missing meta description');
-  else if (page.description_duplicate) issues.push('Duplicate meta description');
+  else if (isTruthyFlag(page.description_duplicate)) issues.push('Duplicate meta description');
   if (!page.h1) issues.push('Missing H1');
-  else if (page.h1_duplicate) issues.push('Duplicate H1');
+  else if (isTruthyFlag(page.h1_duplicate)) issues.push('Duplicate H1');
   if (page.words_count != null && page.words_count < 300) issues.push(`Thin content (${page.words_count} words)`);
   if (Array.isArray(page.issues)) {
     for (const issue of page.issues) {
