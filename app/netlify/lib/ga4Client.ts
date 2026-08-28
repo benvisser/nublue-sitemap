@@ -15,13 +15,26 @@ interface RunReportResponse {
   rows?: RunReportRow[];
 }
 
+/** GA4_SERVICE_ACCOUNT_JSON is expected base64-encoded (of the full
+ * service-account JSON key file). A multi-line secret like a PEM private
+ * key stored as plain JSON has repeatedly gotten mangled somewhere in
+ * Netlify's env var storage/injection path in practice (embedded
+ * newlines turning into literal line breaks, breaking JSON.parse) —
+ * base64 has no characters that path can corrupt. Still tries a raw
+ * JSON.parse first in case the value was set unencoded. */
 function serviceAccountCredentials(): Record<string, unknown> {
   const raw = Netlify.env.get('GA4_SERVICE_ACCOUNT_JSON');
   if (!raw) throw new Error('GA4_SERVICE_ACCOUNT_JSON is not set');
+
   try {
     return JSON.parse(raw);
   } catch {
-    throw new Error('GA4_SERVICE_ACCOUNT_JSON is not valid JSON');
+    // fall through to base64 attempt
+  }
+  try {
+    return JSON.parse(Buffer.from(raw, 'base64').toString('utf8'));
+  } catch {
+    throw new Error('GA4_SERVICE_ACCOUNT_JSON is not valid JSON (tried both raw and base64-decoded)');
   }
 }
 
