@@ -1,4 +1,4 @@
-import type { KeywordQuery, PageSeoData, SeoSnapshot } from '../../src/data/seoTypes.js';
+import { computeLocalSeoScore, type KeywordQuery, type PageSeoData, type SeoSnapshot } from '../../src/data/seoTypes.js';
 import { currentSitePaths, projectedPaths } from './seoConfig.js';
 import { getKeywordPositions, getPageAudit } from './seRankingClient.js';
 import { getSessionsByPath } from './ga4Client.js';
@@ -16,9 +16,11 @@ function buildRealRows(
   for (const path of paths) {
     byPath[path] = {
       path,
+      totalSearchVolume: 0,
       potentialTraffic: 0,
       actualTraffic: sessionsByPath[path] ?? null,
       contentScore: 0,
+      localSeoScore: 0,
       keywordCount: 0,
       top3Keywords: 0,
       issues: [],
@@ -33,14 +35,17 @@ function buildRealRows(
     const entry = byPath[row.url];
     if (!entry) continue; // keyword tracked against a URL outside our sitemap (e.g. old redirect)
     entry.keywordCount += 1;
+    entry.totalSearchVolume += row.volume;
     if (row.position != null && row.position <= 3) entry.top3Keywords += 1;
     if (row.position != null) entry.potentialTraffic += estimateClicks(row.volume, row.position);
     const list = queriesByPath.get(row.url) || [];
     list.push({ query: row.keyword, volume: row.volume, position: row.position });
     queriesByPath.set(row.url, list);
   }
+  // Every tracked keyword for the page, most-searched first — this is the
+  // "current rank for tracked keywords" list, not a trimmed preview.
   for (const [path, queries] of queriesByPath) {
-    byPath[path].topQueries = queries.sort((a, b) => b.volume - a.volume).slice(0, 8);
+    byPath[path].topQueries = queries.sort((a, b) => b.volume - a.volume);
   }
 
   for (const row of auditRows) {
@@ -51,7 +56,9 @@ function buildRealRows(
   }
 
   for (const path of paths) {
-    byPath[path].recommendations = recommendationsFor(byPath[path]);
+    const entry = byPath[path];
+    entry.localSeoScore = computeLocalSeoScore(entry.topQueries, entry.contentScore);
+    entry.recommendations = recommendationsFor(entry);
   }
 
   return byPath;
@@ -79,9 +86,11 @@ function addProjectedRows(rows: Record<string, PageSeoData>): void {
     const parent = parentPath ? rows[parentPath] : undefined;
     rows[path] = {
       path,
+      totalSearchVolume: parent ? Math.round(parent.totalSearchVolume * PROJECTION_FACTOR) : 0,
       potentialTraffic: parent ? Math.round(parent.potentialTraffic * PROJECTION_FACTOR) : 0,
       actualTraffic: null,
       contentScore: 0,
+      localSeoScore: 0,
       keywordCount: 0,
       top3Keywords: 0,
       issues: [],

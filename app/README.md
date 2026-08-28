@@ -10,9 +10,11 @@ for the original design brief), plus the SEO/traffic layer discussed in that cha
 - **Node Map** (pan/zoom, collapsible clusters for the blog + city-page
   variants) and **List View** (filterable, sortable by traffic/score).
 - **SEO layer** — click any page node to open an inspector: potential
-  traffic (SE Ranking), actual traffic (GA4), content score + issues, top
-  queries, and ranked recommendations. A "color nodes by" mode turns the map
-  into a traffic/score/opportunity heat map.
+  search volume and estimated traffic (SE Ranking), actual traffic (GA4),
+  every tracked keyword's current rank position, a content score + audit
+  issues, a computed "local SEO score", and ranked recommendations. A
+  "color nodes by" mode turns the map into a traffic/score/local-SEO/
+  opportunity heat map; List View has the same metrics as sortable columns.
 
 ## Project layout
 
@@ -45,17 +47,25 @@ numbers.
 
 ## Local development
 
+`npm run dev` gives you the whole stack locally, not just the frontend —
+`vite.config.ts` loads `@netlify/vite-plugin`, which emulates Functions and
+Blobs directly inside Vite's dev server (see the `netlify()` plugin call).
+First time only, link this checkout to the Netlify site so the plugin can
+pull its real environment variables:
+
 ```
 npm install
-npm run dev          # frontend only — SEO layer runs on sample data
+npx netlify login          # opens a browser once
+npx netlify link --id e093103e-0d47-4bd3-9199-97def45ce86b
+npm run dev                 # now http://localhost:5173 has real functions + your site's env vars
 ```
 
-To exercise the real Netlify Functions locally (including the scheduled
-one, on demand):
-
-```
-npx netlify dev
-```
+Skip `netlify link` if you just want to work on the UI — the functions
+still run locally, they'll just fail on missing SE Ranking/GA4 credentials
+and the app falls back to sample data, same as production does before the
+first snapshot exists. Either way, don't run a separate `netlify dev`
+process alongside this — the Vite plugin already covers what that would
+do.
 
 ## Environment variables (set in Netlify site settings, not in code)
 

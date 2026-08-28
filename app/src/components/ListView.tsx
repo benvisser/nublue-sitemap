@@ -5,7 +5,7 @@ import { opportunityScore, type SeoSnapshot } from '../data/seoTypes';
 import { formatNumber } from '../lib/format';
 import { LinkIcon } from './LinkIcon';
 
-type SortKey = 'name' | 'traffic' | 'score' | 'opportunity';
+type SortKey = 'name' | 'traffic' | 'score' | 'local' | 'opportunity';
 type SortDir = 'asc' | 'desc';
 
 interface ListViewProps {
@@ -36,7 +36,15 @@ export function ListView({ allNodes, seo, selectedPath, onSelectNode }: ListView
     }
     const withMetric = filtered.map((n) => {
       const row = n.url ? seo?.pages[n.url] : undefined;
-      const metric = !row ? -1 : sortKey === 'traffic' ? row.potentialTraffic : sortKey === 'score' ? row.contentScore : opportunityScore(row);
+      const metric = !row
+        ? -1
+        : sortKey === 'traffic'
+          ? row.potentialTraffic
+          : sortKey === 'score'
+            ? row.contentScore
+            : sortKey === 'local'
+              ? row.localSeoScore
+              : opportunityScore(row);
       return { n, metric };
     });
     withMetric.sort((a, b) => (sortDir === 'desc' ? b.metric - a.metric : a.metric - b.metric));
@@ -75,6 +83,9 @@ export function ListView({ allNodes, seo, selectedPath, onSelectNode }: ListView
           <button type="button" className="list-header__sort" style={{ width: 76 }} onClick={() => toggleSort('score')}>
             Score {sortArrow('score')}
           </button>
+          <button type="button" className="list-header__sort" style={{ width: 76 }} onClick={() => toggleSort('local')}>
+            Local {sortArrow('local')}
+          </button>
           <span style={{ width: 26 }} />
         </div>
 
@@ -92,6 +103,7 @@ export function ListView({ allNodes, seo, selectedPath, onSelectNode }: ListView
                 <span className="list-row__path">{n.url || (n.kind === 'cluster' ? 'group' : '—')}</span>
                 <span className="list-row__metric">{row ? formatNumber(row.potentialTraffic) : '—'}</span>
                 <span className="list-row__metric">{row ? `${row.contentScore}` : '—'}</span>
+                <span className="list-row__metric">{row ? `${row.localSeoScore}` : '—'}</span>
                 {n.url ? (
                   <a
                     href={`${BASE_URL}${n.url}`}

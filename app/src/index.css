@@ -651,10 +651,26 @@ button {
   margin: 0 0 10px;
 }
 
+.score-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 18px;
+}
+
+.query-table-scroll {
+  max-height: 260px;
+  overflow-y: auto;
+}
+
 .query-table {
   width: 100%;
   border-collapse: collapse;
   font-size: 13px;
+}
+.query-table thead th {
+  position: sticky;
+  top: 0;
+  background: var(--white);
 }
 .query-table th {
   text-align: left;

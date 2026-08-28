@@ -48,6 +48,7 @@ export function Toolbar({
           <option value="none">Color: off</option>
           <option value="traffic">Color by traffic</option>
           <option value="score">Color by content score</option>
+          <option value="local">Color by local SEO score</option>
           <option value="opportunity">Color by opportunity</option>
         </select>
         <button type="button" className="pill-btn pill-btn--outline-red" onClick={onExpandAll}>

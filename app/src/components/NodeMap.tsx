@@ -30,9 +30,11 @@ function heatFor(row: PageSeoData | undefined, mode: ColorMode): { bg: string; f
   const t =
     mode === 'score'
       ? row.contentScore / 100
-      : mode === 'traffic'
-        ? Math.min(1, row.potentialTraffic / MAX_TRAFFIC_FOR_SCALE)
-        : Math.min(1, opportunityScore(row) / MAX_TRAFFIC_FOR_SCALE);
+      : mode === 'local'
+        ? row.localSeoScore / 100
+        : mode === 'traffic'
+          ? Math.min(1, row.potentialTraffic / MAX_TRAFFIC_FOR_SCALE)
+          : Math.min(1, opportunityScore(row) / MAX_TRAFFIC_FOR_SCALE);
   return { bg: sequentialColor(t), fg: textOnSequential(t) };
 }
 

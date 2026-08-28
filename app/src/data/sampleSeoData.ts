@@ -9,7 +9,7 @@
 // are configured (see app/README.md).
 
 import { flattenTree, getSiteTree, type PageNode } from './sitemapTree';
-import type { KeywordQuery, PageSeoData, SeoSnapshot } from './seoTypes';
+import { computeLocalSeoScore, type KeywordQuery, type PageSeoData, type SeoSnapshot } from './seoTypes';
 
 function hash(input: string): number {
   let h = 2166136261;
@@ -26,11 +26,35 @@ function rand(seed: number, salt: number): number {
 }
 
 const SAMPLE_QUERIES: Record<string, string[]> = {
-  electrical: ['emergency electrician near me', 'panel upgrade cost', 'circuit breaker keeps tripping'],
-  plumbing: ['emergency plumber near me', 'sewer line repair cost', 'water heater not working'],
-  hvac: ['ac repair near me', 'furnace not heating', 'hvac maintenance plan'],
-  service: ['electrician near me', 'plumber near me', 'hvac company near me'],
-  default: ['home service company near me', 'licensed contractor near me', 'same day repair'],
+  electrical: [
+    'emergency electrician near me',
+    'panel upgrade cost',
+    'circuit breaker keeps tripping',
+    'licensed electrician near me',
+    'electrical panel replacement cost',
+    'why does my breaker keep tripping',
+    'electrician same day service',
+  ],
+  plumbing: [
+    'emergency plumber near me',
+    'sewer line repair cost',
+    'water heater not working',
+    'licensed plumber near me',
+    'tankless water heater installation cost',
+    'low water pressure fix',
+    'plumber same day service',
+  ],
+  hvac: [
+    'ac repair near me',
+    'furnace not heating',
+    'hvac maintenance plan',
+    'hvac company near me',
+    'ac not cooling fix',
+    'heat pump installation cost',
+    'emergency hvac repair',
+  ],
+  service: ['electrician near me', 'plumber near me', 'hvac company near me', 'home service company near me', 'licensed contractor near me'],
+  default: ['home service company near me', 'licensed contractor near me', 'same day repair', 'trusted home services', 'local contractor reviews'],
 };
 
 function queriesFor(path: string, seed: number): KeywordQuery[] {
@@ -82,15 +106,19 @@ function buildRow(node: PageNode): PageSeoData | null {
   const isNew = !!node.isNew;
   const contentScore = isNew ? 0 : Math.round(35 + rand(seed, 2) * 60);
   const potentialTraffic = Math.round((node.depth <= 1 ? 400 : node.depth === 2 ? 150 : 60) * (0.4 + rand(seed, 3) * 1.4));
+  const topQueries = isNew ? [] : queriesFor(node.url, seed);
+  const totalSearchVolume = topQueries.reduce((sum, q) => sum + q.volume, 0);
   return {
     path: node.url,
+    totalSearchVolume,
     potentialTraffic,
     actualTraffic: isNew ? null : Math.round(potentialTraffic * (0.25 + rand(seed, 4) * 0.5)),
     contentScore,
+    localSeoScore: computeLocalSeoScore(topQueries, contentScore),
     keywordCount: isNew ? 0 : Math.round(4 + rand(seed, 5) * 40),
     top3Keywords: isNew ? 0 : Math.round(rand(seed, 6) * 6),
     issues: isNew ? [] : pick(ISSUE_POOL, seed, 7, 2 + Math.round(rand(seed, 20) * 2)),
-    topQueries: isNew ? [] : queriesFor(node.url, seed),
+    topQueries,
     recommendations: pick(RECS, seed, 30, 3),
     projected: isNew,
   };

@@ -47,9 +47,14 @@ export function Inspector({ node, seo, isSample, onClose }: InspectorProps) {
             <>
               <div className="stat-tiles">
                 <div className="stat-tile">
+                  <span className="stat-tile__label">Potential search volume</span>
+                  <span className="stat-tile__value">{formatNumber(row.totalSearchVolume)}</span>
+                  <span className="stat-tile__sub">monthly searches, all tracked keywords</span>
+                </div>
+                <div className="stat-tile">
                   <span className="stat-tile__label">Potential traffic</span>
                   <span className="stat-tile__value">{formatNumber(row.potentialTraffic)}</span>
-                  <span className="stat-tile__sub">est. monthly clicks, SE Ranking</span>
+                  <span className="stat-tile__sub">est. monthly clicks at current rank</span>
                 </div>
                 <div className="stat-tile">
                   <span className="stat-tile__label">Actual traffic</span>
@@ -68,45 +73,58 @@ export function Inspector({ node, seo, isSample, onClose }: InspectorProps) {
                 </div>
               </div>
 
-              <div>
-                <h3 className="section-title">Content score</h3>
-                <div className="gauge-row">
-                  <ScoreGauge score={row.contentScore} />
-                  <div>
-                    {row.issues.length === 0 ? (
-                      <span className="gauge-row__label">No open issues</span>
-                    ) : (
-                      <ul className="issue-list">
-                        {row.issues.map((issue) => (
-                          <li key={issue}>{issue}</li>
-                        ))}
-                      </ul>
-                    )}
+              <div className="score-row">
+                <div>
+                  <h3 className="section-title" title="Composite: 60% average rank strength across this page's tracked keywords, 40% content/audit score — not a single SE Ranking field.">
+                    Local SEO score ⓘ
+                  </h3>
+                  <div className="gauge-row">
+                    <ScoreGauge score={row.localSeoScore} />
+                    <span className="gauge-row__label">Blend of keyword rank strength + content score — see tooltip</span>
+                  </div>
+                </div>
+                <div>
+                  <h3 className="section-title">Content score</h3>
+                  <div className="gauge-row">
+                    <ScoreGauge score={row.contentScore} />
+                    <div>
+                      {row.issues.length === 0 ? (
+                        <span className="gauge-row__label">No open issues</span>
+                      ) : (
+                        <ul className="issue-list">
+                          {row.issues.map((issue) => (
+                            <li key={issue}>{issue}</li>
+                          ))}
+                        </ul>
+                      )}
+                    </div>
                   </div>
                 </div>
               </div>
 
               {row.topQueries.length > 0 && (
                 <div>
-                  <h3 className="section-title">Top queries</h3>
-                  <table className="query-table">
-                    <thead>
-                      <tr>
-                        <th>Query</th>
-                        <th className="num">Volume</th>
-                        <th className="num">Position</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {row.topQueries.map((q) => (
-                        <tr key={q.query}>
-                          <td>{q.query}</td>
-                          <td className="num">{formatNumber(q.volume)}</td>
-                          <td className="num">{q.position ?? '—'}</td>
+                  <h3 className="section-title">Tracked keywords &amp; current rank ({row.topQueries.length})</h3>
+                  <div className="query-table-scroll">
+                    <table className="query-table">
+                      <thead>
+                        <tr>
+                          <th>Query</th>
+                          <th className="num">Volume</th>
+                          <th className="num">Position</th>
                         </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                      </thead>
+                      <tbody>
+                        {row.topQueries.map((q) => (
+                          <tr key={q.query}>
+                            <td>{q.query}</td>
+                            <td className="num">{formatNumber(q.volume)}</td>
+                            <td className="num">{q.position ?? '—'}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
                 </div>
               )}
 
