@@ -98,20 +98,28 @@ alongside this — the Vite plugin already covers what that would do.
 | Variable | Used by | Notes |
 |---|---|---|
 | `SERANKING_API_KEY` | seRankingClient.ts | Account → API in SE Ranking |
-| `SERANKING_PROJECT_ID` | seRankingClient.ts | the tracked project ID for callnublue.com |
-| `SERANKING_API_BASE_URL` | seRankingClient.ts | optional override, see note below |
+| `SERANKING_API_BASE_URL` | seRankingClient.ts | optional override; defaults to `https://api.seranking.com/v1` |
 | `GA4_PROPERTY_ID` | ga4Client.ts | numeric GA4 property ID |
-| `GA4_SERVICE_ACCOUNT_JSON` | ga4Client.ts | full service-account key JSON, as one string; grant it Viewer on the GA4 property (Admin → Property Access Management) and enable the Analytics Data API on its GCP project |
+| `GA4_SERVICE_ACCOUNT_JSON` | ga4Client.ts | full service-account key JSON, as one string; grant it Viewer on the GA4 property (Admin → Property Access Management) and enable the Analytics Data API on its GCP project. **Set this in the Netlify dashboard, not via `netlify env:set`/the API** — a multi-line secret like this needs the dashboard's own multi-line field; other paths have corrupted it in practice. |
 
-**⚠️ SE Ranking endpoint verification needed.** This sandbox couldn't reach
-seranking.com to confirm current endpoint paths/response fields against
-live docs (egress to that domain is blocked here). `seRankingClient.ts`
-is written from general knowledge of their REST API and isolates every
-wire call to that one file — before the first real nightly run, compare
-it against your account's API docs (SE Ranking → Account → API) and
-adjust paths/field names there if anything's changed. The GA4 client uses
-the stable, well-documented Data API v1beta `runReport` endpoint and
-shouldn't need the same check.
+There's no `SERANKING_PROJECT_ID` — SE Ranking's real API (confirmed against
+their published OpenAPI spec, github.com/seranking/openapi) has no
+"project" concept for these two calls. `getKeywordPositions` calls
+`GET /domain/keywords?domain=callnublue.com` directly; `getPageAudit`
+calls `GET /audit/list` to find the account's existing Website Audit for
+this domain, then reads that audit's `/pages`.
+
+**⚠️ Response field names aren't confirmed.** The endpoints and auth
+(`apikey` as a query param, not a header — the original guess had this
+wrong too, which is why early requests 400'd) are confirmed against the
+real spec above, but that spec doesn't document response body field
+names for either endpoint. `seRankingClient.ts`'s mapping is a
+best-effort guess (`keyword`/`position`/`volume`/`url`,
+`score`/`issues`) with a console.log if either call returns zero rows —
+check Netlify's function logs against a real response if numbers still
+look off, and adjust the mapping there; it's the one file that touches
+the wire. The GA4 client uses the stable, well-documented Data API
+v1beta `runReport` endpoint and didn't need this kind of correction.
 
 ## First run after adding credentials
 

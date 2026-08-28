@@ -1,20 +1,24 @@
-// SE Ranking API client used only by seRankingProjectPull.ts (which shares
-// one pull across every page view via a TTL cache — see that file for
-// why) — never called from the browser, so the API key never leaves the
-// server.
+// SE Ranking's real public "Data API" client — confirmed against their
+// OpenAPI spec (github.com/seranking/openapi, data-api.yaml) after the
+// original guessed endpoints (api4.seranking.com, Authorization header,
+// a /projects/{id}/keywords path) all 400'd for real. Two corrections
+// that mattered:
+//   - Base URL is api.seranking.com (not api4), under /v1.
+//   - Auth is an `apikey` QUERY PARAMETER, not an Authorization header.
+// There's no "project ID" for these endpoints — /domain/keywords works
+// directly off the domain name, and Website Audit results come from an
+// audit run's own id, discovered via /audit/list (see getPageAudit).
 //
-// ⚠️ VERIFY BEFORE FIRST REAL RUN: this project could not reach
-// seranking.com's docs from this sandbox (egress to that domain is
-// blocked here), so the endpoint paths and response field names below are
-// written from general knowledge of SE Ranking's REST API, not confirmed
-// against current docs. Before relying on this, log into SE Ranking →
-// Account → API, compare against the "Keyword rank tracking" and "Website
-// / Page Audit" endpoints for your plan, and adjust SERANKING_API_BASE_URL
-// or the paths below if they've changed. Everything that touches the wire
-// is isolated to this one file on purpose, so that fix stays a one-file
-// change.
-
-const BASE_URL = Netlify.env.get('SERANKING_API_BASE_URL') || 'https://api4.seranking.com/v1';
+// ⚠️ Response body schemas are NOT specified in SE Ranking's own OpenAPI
+// doc (both endpoints just declare `content: application/json: {}`), so
+// the field-name guesses below (keyword/position/volume/url,
+// score/issues) are our best read of typical REST conventions, not
+// confirmed. If numbers still look wrong once this is live, check
+// Netlify's function logs — getKeywordPositions/getPageAudit log the raw
+// response on an unexpected shape — and adjust the mapping here; this
+// file is the one place that touches the wire.
+const BASE_URL = Netlify.env.get('SERANKING_API_BASE_URL') || 'https://api.seranking.com/v1';
+const DOMAIN = 'callnublue.com';
 
 function apiKey(): string {
   const key = Netlify.env.get('SERANKING_API_KEY');
@@ -24,8 +28,9 @@ function apiKey(): string {
 
 async function get<T>(path: string, params: Record<string, string | number> = {}): Promise<T> {
   const url = new URL(BASE_URL + path);
+  url.searchParams.set('apikey', apiKey());
   Object.entries(params).forEach(([k, v]) => url.searchParams.set(k, String(v)));
-  const res = await fetch(url, { headers: { Authorization: `Token ${apiKey()}` } });
+  const res = await fetch(url);
   if (!res.ok) {
     throw new Error(`SE Ranking ${path} -> ${res.status} ${await res.text().catch(() => '')}`);
   }
@@ -45,31 +50,50 @@ export interface SeRankingAuditPage {
   issues: string[];
 }
 
-/** Keyword positions + search volume for every tracked keyword in the
- * project, so we can group them by landing-page URL client-side. */
+/** Every keyword SE Ranking has organic-ranking data for on this domain
+ * (GET /v1/domain/keywords) — not a hand-picked "tracked" list, but real
+ * position + volume data per keyword, each tied to the page it ranks
+ * with. We pull the whole domain once (see seRankingProjectPull.ts) and
+ * filter to one page client-side, same as the old per-project model. */
 export async function getKeywordPositions(): Promise<SeRankingKeywordRow[]> {
-  const projectId = Netlify.env.get('SERANKING_PROJECT_ID');
-  if (!projectId) throw new Error('SERANKING_PROJECT_ID is not set');
-  const data = await get<{ keywords?: Array<Record<string, unknown>> }>(`/projects/${projectId}/keywords`, { limit: 1000 });
-  const rows = data.keywords || [];
+  const data = await get<{ keywords?: Array<Record<string, unknown>> } | Array<Record<string, unknown>>>('/domain/keywords', {
+    domain: DOMAIN,
+    source: 'us',
+    type: 'organic',
+    limit: 500,
+  });
+  const rows = Array.isArray(data) ? data : data.keywords || [];
+  if (rows.length === 0) console.log('[seRankingClient] getKeywordPositions: 0 rows — check the raw response shape if this is unexpected');
   return rows.map((k) => ({
-    keyword: String(k.keyword ?? k.name ?? ''),
+    keyword: String(k.keyword ?? k.query ?? k.name ?? ''),
     volume: Number(k.volume ?? k.search_volume ?? 0),
     position: k.position == null ? null : Number(k.position),
-    url: String(k.url ?? k.target_url ?? ''),
+    url: String(k.url ?? k.page ?? k.target_url ?? ''),
   }));
 }
 
-/** Page-level audit score + issue list from SE Ranking's Website/Page Audit
- * tool for the same project. */
+/** Website Audit has no persistent "project" either — results belong to
+ * a specific audit *run*. We list existing audits for the account and
+ * use the most recently created one whose target matches our domain,
+ * rather than requiring a separately-configured audit id. If no audit
+ * has ever been run for this domain in SE Ranking, this returns []
+ * (surfaces as "SE Ranking integration coming soon" for content
+ * score/issues, same as any other empty pull). */
 export async function getPageAudit(): Promise<SeRankingAuditPage[]> {
-  const projectId = Netlify.env.get('SERANKING_PROJECT_ID');
-  if (!projectId) throw new Error('SERANKING_PROJECT_ID is not set');
-  const data = await get<{ pages?: Array<Record<string, unknown>> }>(`/audit/${projectId}/pages`);
-  const rows = data.pages || [];
+  const list = await get<{ audits?: Array<Record<string, unknown>> } | Array<Record<string, unknown>>>('/audit/list');
+  const audits = Array.isArray(list) ? list : list.audits || [];
+  const match = audits.find((a) => String(a.domain ?? a.site ?? a.url ?? '').includes(DOMAIN));
+  if (!match) {
+    console.log('[seRankingClient] getPageAudit: no audit found for', DOMAIN, '— has a Website Audit ever been run for this site in SE Ranking?');
+    return [];
+  }
+  const auditId = String(match.id ?? match.audit_id ?? '');
+
+  const data = await get<{ pages?: Array<Record<string, unknown>> } | Array<Record<string, unknown>>>(`/audit/${auditId}/pages`);
+  const rows = Array.isArray(data) ? data : data.pages || [];
   return rows.map((p) => ({
-    url: String(p.url ?? ''),
-    score: Number(p.score ?? p.content_score ?? 0),
+    url: String(p.url ?? p.page_url ?? ''),
+    score: Number(p.score ?? p.content_score ?? p.seo_score ?? 0),
     issues: Array.isArray(p.issues) ? p.issues.map(String) : [],
   }));
 }
