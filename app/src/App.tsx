@@ -18,7 +18,7 @@ export default function App() {
 
   const { allNodes, layout, isOpen, toggle, setAll } = useSitemap(version);
   const { zoom, scrollRef, zoomIn, zoomOut, zoomReset } = usePanZoom();
-  const { snapshot, isSample } = useSeoSnapshot();
+  const { snapshot, hasSnapshot } = useSeoSnapshot();
 
   const pageCount = allNodes.filter((n) => n.kind !== 'cluster').length;
   const newCount = allNodes.filter((n) => n.isNew).length;
@@ -46,8 +46,8 @@ export default function App() {
         newCount={newCount}
         colorMode={colorMode}
         onColorModeChange={setColorMode}
-        snapshotGeneratedAt={snapshot?.generatedAt ?? null}
-        isSample={isSample}
+        hasSnapshot={hasSnapshot}
+        snapshotGeneratedAt={snapshot.generatedAt}
         onExpandAll={() => setAll(true)}
         onCollapseAll={() => setAll(false)}
       />
@@ -72,7 +72,7 @@ export default function App() {
         <ListView allNodes={allNodes} seo={snapshot} selectedPath={selectedNode?.url ?? null} onSelectNode={selectNode} />
       )}
 
-      {selectedNode && <Inspector node={selectedNode} seo={snapshot} isSample={isSample} onClose={() => setSelectedNode(null)} />}
+      {selectedNode && <Inspector node={selectedNode} seo={snapshot} onClose={() => setSelectedNode(null)} />}
     </div>
   );
 }

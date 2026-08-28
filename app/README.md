@@ -22,7 +22,6 @@ for the original design brief), plus the SEO/traffic layer discussed in that cha
 src/                    React app (Vite)
   data/sitemapTree.ts    the page tree — current + future versions
   data/seoTypes.ts        shape of the SEO snapshot
-  data/sampleSeoData.ts   deterministic sample data (dev fallback)
 netlify/
   functions/
     get-seo-snapshot.mts      serves the last snapshot to the frontend
@@ -40,10 +39,18 @@ browser?** Covered in the original design chat: a browser call would leak
 the SE Ranking API key and hit both APIs' rate limits on every page load.
 Instead `refresh-seo-data-background.mts` runs server-side on a schedule, writes one
 JSON snapshot to Netlify Blobs, and the app only ever reads that snapshot
-via `get-seo-snapshot.mts`. If no snapshot exists yet (fresh deploy, or
-credentials not configured), the app falls back to deterministic sample
-data and shows a "Sample SEO data" badge so nobody mistakes it for real
-numbers.
+via `get-seo-snapshot.mts`.
+
+**There is no fabricated fallback data.** Each source (SE Ranking, GA4)
+runs independently in `buildSnapshot.ts` — a failure in one never blocks
+the other, and `sources.{seRanking,ga4}` on the snapshot records which
+actually succeeded on the last pull. The frontend never invents a number:
+a field only ever shows real data from a source that's live; otherwise
+it's grayed out with a small "integration coming soon" / "not connected
+yet" note (`Inspector.tsx`), and if no pull has ever completed at all, the
+toolbar says so and every node reads "no data yet". This was a deliberate
+change after early testing — a fabricated demo snapshot made it hard to
+tell what was actually wired up versus placeholder.
 
 ## Local development
 
@@ -61,11 +68,11 @@ npm run dev                 # now http://localhost:5173 has real functions + you
 ```
 
 Skip `netlify link` if you just want to work on the UI — the functions
-still run locally, they'll just fail on missing SE Ranking/GA4 credentials
-and the app falls back to sample data, same as production does before the
-first snapshot exists. Either way, don't run a separate `netlify dev`
-process alongside this — the Vite plugin already covers what that would
-do.
+still run locally, they'll just have no snapshot to serve without
+credentials, so every node reads "no data yet" (same as production before
+the first real pull — see the note above on why there's no fake fallback
+data). Either way, don't run a separate `netlify dev` process alongside
+this — the Vite plugin already covers what that would do.
 
 ## Environment variables (set in Netlify site settings, not in code)
 

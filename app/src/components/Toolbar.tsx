@@ -8,8 +8,8 @@ interface ToolbarProps {
   newCount: number;
   colorMode: ColorMode;
   onColorModeChange: (m: ColorMode) => void;
-  snapshotGeneratedAt: string | null;
-  isSample: boolean;
+  snapshotGeneratedAt: string;
+  hasSnapshot: boolean;
   onExpandAll: () => void;
   onCollapseAll: () => void;
 }
@@ -21,7 +21,7 @@ export function Toolbar({
   colorMode,
   onColorModeChange,
   snapshotGeneratedAt,
-  isSample,
+  hasSnapshot,
   onExpandAll,
   onCollapseAll,
 }: ToolbarProps) {
@@ -36,10 +36,15 @@ export function Toolbar({
       <span className="toolbar__title">{title}</span>
       <span className="toolbar__count">{countLabel}</span>
 
-      {snapshotGeneratedAt && (
-        <span className={`toolbar__freshness ${isSample ? 'toolbar__freshness--sample' : ''}`} title={isSample ? 'Demo data — no real snapshot yet' : 'Last SE Ranking + GA4 pull'}>
+      {hasSnapshot ? (
+        <span className="toolbar__freshness" title="Last SE Ranking + GA4 pull">
           <span className="toolbar__freshness-dot" />
-          {isSample ? 'Sample SEO data' : 'SEO data as of'} {formatRelativeDate(snapshotGeneratedAt)}
+          SEO data as of {formatRelativeDate(snapshotGeneratedAt)}
+        </span>
+      ) : (
+        <span className="toolbar__freshness toolbar__freshness--sample" title="No SE Ranking/GA4 pull has completed yet">
+          <span className="toolbar__freshness-dot" />
+          No SEO data pulled yet
         </span>
       )}
 

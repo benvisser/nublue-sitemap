@@ -9,7 +9,6 @@ import { ScoreGauge } from './ScoreGauge';
 interface InspectorProps {
   node: PageNode;
   seo: SeoSnapshot | null;
-  isSample: boolean;
   onClose: () => void;
 }
 
@@ -25,13 +24,12 @@ function PendingTile({ label }: { label: string }) {
   );
 }
 
-export function Inspector({ node, seo, isSample, onClose }: InspectorProps) {
+export function Inspector({ node, seo, onClose }: InspectorProps) {
   const row = node.url ? seo?.pages[node.url] : undefined;
-  // Sample mode (no real snapshot at all yet) keeps showing its fabricated
-  // numbers as a demo of the full UI. Once a real snapshot exists, each
-  // source's own success/failure on the last pull decides what's live.
-  const seRankingLive = isSample || Boolean(seo?.sources.seRanking);
-  const ga4Live = isSample || Boolean(seo?.sources.ga4);
+  // No fabricated fallback: each field only ever shows a number when its
+  // source actually returned one on the last pull.
+  const seRankingLive = Boolean(seo?.sources.seRanking);
+  const ga4Live = Boolean(seo?.sources.ga4);
 
   return (
     <>
@@ -52,8 +50,8 @@ export function Inspector({ node, seo, isSample, onClose }: InspectorProps) {
             </a>
           )}
           {row?.projected && <span className="badge badge--projected">Projected estimate</span>}
-          {isSample && <span className="badge badge--sample">Sample data — not live SE Ranking/GA4</span>}
-          {!isSample && !seRankingLive && <span className="badge badge--pending">SE Ranking integration coming soon</span>}
+          {!seRankingLive && <span className="badge badge--pending">SE Ranking integration coming soon</span>}
+          {!ga4Live && <span className="badge badge--pending">GA4 not connected yet</span>}
         </div>
 
         <div className="inspector__body">
