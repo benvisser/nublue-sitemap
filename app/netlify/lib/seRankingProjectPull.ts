@@ -1,7 +1,7 @@
 // SE Ranking's API is bulk-only — there's no cheap "just this one page's
 // keywords" endpoint, so unlike GA4 (see ga4Client.ts's getSessionsForPath)
 // we can't afford to call it fresh on every page open. Instead we pull the
-// whole project's keyword positions + page audit once, cache it in Netlify
+// whole domain's keyword positions + page audit once, cache it in Netlify
 // Blobs, and every get-page-seo.mts call reuses that cache until it goes
 // stale — one pull serves however many pages get opened in that window.
 import { getStore } from '@netlify/blobs';
@@ -13,6 +13,12 @@ export interface ProjectPull {
   keywordRows: SeRankingKeywordRow[];
   auditRows: SeRankingAuditPage[];
   fetchedAt: string;
+  /** True as long as keyword/position data came through — that's the
+   * bulk of what "SE Ranking connected" means for the UI. The Website
+   * Audit call (content score/issues) is a separate, independently
+   * fallible call: if it fails, auditRows is just empty (content score
+   * reads 0, no issues) rather than taking down the whole pull, since
+   * keyword data alone is still valuable. */
   ok: boolean;
 }
 
@@ -33,20 +39,30 @@ export async function peekProjectPull(): Promise<ProjectPull | null> {
 
 /** Returns the cached pull if it's still fresh; otherwise re-pulls from SE
  * Ranking. `force` bypasses the TTL (used by the inspector's manual
- * refresh). A failed re-pull falls back to the last good cached pull
- * (stale-but-real beats nothing) rather than wiping it out. */
+ * refresh). A failed keyword re-pull falls back to the last good cached
+ * pull (stale-but-real beats nothing) rather than wiping it out. */
 export async function getProjectPull(force = false): Promise<ProjectPull> {
   const cached = (await store().get('current', { type: 'json' })) as ProjectPull | null;
   if (cached && !force && isFresh(cached)) return cached;
 
-  try {
-    const [keywordRows, auditRows] = await Promise.all([getKeywordPositions(), getPageAudit()]);
-    const fresh: ProjectPull = { keywordRows, auditRows, fetchedAt: new Date().toISOString(), ok: true };
-    await store().setJSON('current', fresh);
-    return fresh;
-  } catch (err) {
-    console.error('[seRankingProjectPull] pull failed — leaving SE Ranking disconnected for this request:', err);
+  const [keywordResult, auditResult] = await Promise.allSettled([getKeywordPositions(), getPageAudit()]);
+
+  if (keywordResult.status === 'rejected') {
+    console.error('[seRankingProjectPull] keyword pull failed — leaving SE Ranking disconnected for this request:', keywordResult.reason);
     if (cached) return { ...cached, ok: false };
     return { keywordRows: [], auditRows: [], fetchedAt: new Date().toISOString(), ok: false };
   }
+
+  if (auditResult.status === 'rejected') {
+    console.error('[seRankingProjectPull] audit pull failed — keyword data is still good, content score/issues will read empty:', auditResult.reason);
+  }
+
+  const fresh: ProjectPull = {
+    keywordRows: keywordResult.value,
+    auditRows: auditResult.status === 'fulfilled' ? auditResult.value : [],
+    fetchedAt: new Date().toISOString(),
+    ok: true,
+  };
+  await store().setJSON('current', fresh);
+  return fresh;
 }

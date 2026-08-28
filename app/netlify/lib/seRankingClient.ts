@@ -72,13 +72,17 @@ export async function getKeywordPositions(): Promise<SeRankingKeywordRow[]> {
   }));
 }
 
-/** Website Audit has no persistent "project" either — results belong to
- * a specific audit *run*. We list existing audits for the account and
- * use the most recently created one whose target matches our domain,
- * rather than requiring a separately-configured audit id. If no audit
- * has ever been run for this domain in SE Ranking, this returns []
- * (surfaces as "SE Ranking integration coming soon" for content
- * score/issues, same as any other empty pull). */
+/** ⚠️ UNCONFIRMED — `/audit/list` returned a bare nginx 401 (not a JSON
+ * error from SE Ranking's app), and a direct search of their published
+ * OpenAPI spec found no "/v1/audit/list" path at all — an earlier read of
+ * that spec inferred this endpoint from a category description, not a
+ * real path definition. Website Audit may not be part of this public API,
+ * may need a different auth scheme, or may need a differently-shaped
+ * request; unverified for now. Failing here is non-fatal by design (see
+ * seRankingProjectPull.ts) — keyword/position data still comes through
+ * independently, and content score/issues just read empty until this is
+ * sorted out. If your SE Ranking plan does expose Website Audit some
+ * other way, this is the one function to fix. */
 export async function getPageAudit(): Promise<SeRankingAuditPage[]> {
   const list = await get<{ audits?: Array<Record<string, unknown>> } | Array<Record<string, unknown>>>('/audit/list');
   const audits = Array.isArray(list) ? list : list.audits || [];
