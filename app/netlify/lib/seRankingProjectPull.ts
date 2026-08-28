@@ -5,13 +5,19 @@
 // Blobs, and every get-page-seo.mts call reuses that cache until it goes
 // stale — one pull serves however many pages get opened in that window.
 import { getStore } from '@netlify/blobs';
-import { getKeywordPositions, getPageAudit, type SeRankingAuditPage, type SeRankingKeywordRow } from './seRankingClient.js';
+import { findAudit, getKeywordPositions, getPageAudit, type SeRankingAuditPage, type SeRankingKeywordRow } from './seRankingClient.js';
 
 const TTL_MS = 12 * 60 * 60 * 1000; // 12h
 
 export interface ProjectPull {
   keywordRows: SeRankingKeywordRow[];
   auditRows: SeRankingAuditPage[];
+  /** The Website Audit's own id, cached alongside everything else so
+   * get-page-seo.mts can fetch per-page issue detail (see
+   * seRankingClient.ts's getPageIssues) without re-resolving the audit
+   * on every single page open — null if no audit was found for the
+   * domain, in which case per-page issue detail is simply unavailable. */
+  auditId: number | string | null;
   fetchedAt: string;
   /** True as long as keyword/position data came through — that's the
    * bulk of what "SE Ranking connected" means for the UI. The Website
@@ -45,21 +51,25 @@ export async function getProjectPull(force = false): Promise<ProjectPull> {
   const cached = (await store().get('current', { type: 'json' })) as ProjectPull | null;
   if (cached && !force && isFresh(cached)) return cached;
 
-  const [keywordResult, auditResult] = await Promise.allSettled([getKeywordPositions(), getPageAudit()]);
+  const [keywordResult, auditResult, auditIdResult] = await Promise.allSettled([getKeywordPositions(), getPageAudit(), findAudit()]);
 
   if (keywordResult.status === 'rejected') {
     console.error('[seRankingProjectPull] keyword pull failed — leaving SE Ranking disconnected for this request:', keywordResult.reason);
     if (cached) return { ...cached, ok: false };
-    return { keywordRows: [], auditRows: [], fetchedAt: new Date().toISOString(), ok: false };
+    return { keywordRows: [], auditRows: [], auditId: null, fetchedAt: new Date().toISOString(), ok: false };
   }
 
   if (auditResult.status === 'rejected') {
     console.error('[seRankingProjectPull] audit pull failed — keyword data is still good, content score/issues will read empty:', auditResult.reason);
   }
+  if (auditIdResult.status === 'rejected') {
+    console.error('[seRankingProjectPull] findAudit (for per-page issue lookups) failed:', auditIdResult.reason);
+  }
 
   const fresh: ProjectPull = {
     keywordRows: keywordResult.value,
     auditRows: auditResult.status === 'fulfilled' ? auditResult.value : [],
+    auditId: auditIdResult.status === 'fulfilled' && auditIdResult.value ? auditIdResult.value.id : null,
     fetchedAt: new Date().toISOString(),
     ok: true,
   };

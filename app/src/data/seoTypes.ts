@@ -55,6 +55,20 @@ export interface AuditDetail {
   numKeywords: number | null;
 }
 
+/** One real error/warning/notice SE Ranking's crawler found on this
+ * exact page, from the Site Audit "get all issues by URL" endpoint —
+ * distinct from `issues` (a handful of strings we derive ourselves from
+ * duplicate-tag/thin-content/indexability fields). `detail` is a
+ * human-readable summary of the API's `snippet` object (e.g. which URL
+ * redirects, how big an oversized file is), already flattened to text
+ * so the UI doesn't need to know every snippet shape. */
+export interface AuditIssue {
+  code: string;
+  severity: string;
+  group: string;
+  detail: string;
+}
+
 export interface PageSeoData {
   /** URL path key, matches PageNode.url exactly, e.g. "/electrical/panels/" */
   path: string;
@@ -111,6 +125,13 @@ export interface PageSeoData {
    * during the crawl) — distinct from SE Ranking simply not being
    * connected at all, which is `!sources.seRanking` on the API response. */
   auditDetail: AuditDetail | null;
+  /** Real per-page issue list from SE Ranking's Site Audit "get all
+   * issues by URL" endpoint — null if it couldn't be fetched (no audit,
+   * page not in the crawl, API hiccup), [] if it fetched fine and the
+   * page is just clean. Fetched fresh per page open (cheap, single-URL
+   * lookup — SE Ranking's own docs list it at 0 credits), not part of
+   * the cached bulk pull the way keyword/audit-summary data is. */
+  auditIssues: AuditIssue[] | null;
   /** Every keyword SE Ranking tracks against this page, sorted by volume
    * descending — current rank position for each is the whole point of
    * this list, not just the top few. */

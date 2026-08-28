@@ -7,16 +7,33 @@
 //     auth is an `apikey` QUERY PARAMETER. getKeywordPositions() uses this.
 //
 //  2. "Website Audit" (api.seranking.com/v1/project-management/audits) —
-//     the "Crawled pages" data behind SE Ranking's Website Audit tool.
+//     the "Crawled pages" list behind SE Ranking's Website Audit tool.
 //     Base .../v1/project-management/audits, auth is an
 //     `Authorization: Token API_KEY` HEADER — different from #1. Confirmed
 //     against the real published docs (not the OpenAPI spec, which doesn't
-//     cover this product). getPageAudit() uses this.
+//     cover this product). getPageAudit() uses this. Every field this
+//     endpoint returns comes back as a STRING, booleans included (see
+//     isTruthyFlag below) — confirmed against a real response.
 //
-// Both reuse the same SERANKING_API_KEY value; only the auth transport
-// differs per endpoint.
+//  3. "Site Audit — get all issues by URL"
+//     (api.seranking.com/v1/site-audit/audits/issues) — a THIRD base,
+//     confirmed against real published docs the user found directly.
+//     Same `Authorization: Token` header auth as #2, but note the base
+//     path is `site-audit/audits`, not `project-management/audits` — SE
+//     Ranking's Website Audit product apparently has (at least) two
+//     different URL namespaces for what's conceptually the same
+//     underlying audit. Takes `audit_id` + either `url` or `url_id`
+//     (the crawled page's own numeric id from #2's /pages list) and
+//     returns the actual list of issues (error/warning/notice, each with
+//     a machine code and a `snippet` of concrete evidence) for that one
+//     page — the real per-page "recommendations" data, which #2's /pages
+//     list only ever gave as bare counts. getPageIssues() uses this.
+//
+// All three reuse the same SERANKING_API_KEY value; only the auth
+// transport and base path differ per endpoint.
 const BASE_URL = Netlify.env.get('SERANKING_API_BASE_URL') || 'https://api.seranking.com/v1';
 const AUDIT_BASE_URL = Netlify.env.get('SERANKING_AUDIT_API_BASE_URL') || 'https://api.seranking.com/v1/project-management/audits';
+const SITE_AUDIT_BASE_URL = Netlify.env.get('SERANKING_SITE_AUDIT_API_BASE_URL') || 'https://api.seranking.com/v1/site-audit/audits';
 const DOMAIN = 'callnublue.com';
 
 function apiKey(): string {
@@ -45,6 +62,19 @@ async function getAudit<T>(path: string, params: Record<string, string | number>
   const res = await fetch(url, { headers: { Authorization: `Token ${apiKey()}` } });
   if (!res.ok) {
     throw new Error(`SE Ranking audit ${path} -> ${res.status} ${await res.text().catch(() => '')}`);
+  }
+  return res.json() as Promise<T>;
+}
+
+/** Site Audit ("get all issues by URL") API — same `Authorization: Token`
+ * header auth as getAudit(), but a different base path (site-audit/audits,
+ * not project-management/audits). */
+async function getSiteAudit<T>(path: string, params: Record<string, string | number> = {}): Promise<T> {
+  const url = new URL(SITE_AUDIT_BASE_URL + path);
+  Object.entries(params).forEach(([k, v]) => url.searchParams.set(k, String(v)));
+  const res = await fetch(url, { headers: { Authorization: `Token ${apiKey()}` } });
+  if (!res.ok) {
+    throw new Error(`SE Ranking site-audit ${path} -> ${res.status} ${await res.text().catch(() => '')}`);
   }
   return res.json() as Promise<T>;
 }
@@ -310,4 +340,59 @@ export async function getPageAudit(): Promise<SeRankingAuditPage[]> {
       numKeywords: p.num_keywords ?? null,
     };
   });
+}
+
+/** One error/warning/notice SE Ranking's crawler found on a specific
+ * page, from the Site Audit "get all issues by URL" endpoint. `snippet`
+ * is deliberately left as `unknown` here — its shape varies by issue
+ * `code` (a list of redirecting URLs, an oversized file with its size,
+ * etc.) — see summarizeSnippet() in buildSnapshot.ts for how it's turned
+ * into a readable string. */
+export interface SeRankingIssue {
+  /** Machine-readable issue type, e.g. "css_big", "extlinks3xx" */
+  code: string;
+  /** Severity: "error" | "warning" | "notice" (as SE Ranking sends it) */
+  type: string;
+  /** Category, e.g. "links_v2", "css" */
+  group: string;
+  snippet: unknown;
+}
+
+export interface SeRankingPageIssues {
+  url: string;
+  issues: SeRankingIssue[];
+}
+
+interface IssuesResponse {
+  url?: string;
+  issues?: unknown[];
+}
+
+/** Real per-page issue detail — the actual "recommendations" data, as
+ * opposed to getPageAudit()'s bare error/warning/notice counts. Called
+ * per page, on demand (see get-page-seo.mts), not part of the bulk
+ * project pull — the endpoint is designed for single-URL lookups (SE
+ * Ranking's own docs list it at 0 credits cost) and doesn't need the
+ * same caching getKeywordPositions/getPageAudit do. Returns null on any
+ * failure (no audit, page not in this crawl, API hiccup) — non-fatal by
+ * design, same as the rest of this file. */
+export async function getPageIssues(auditId: number | string, pageUrl: string): Promise<SeRankingPageIssues | null> {
+  try {
+    const data = await getSiteAudit<IssuesResponse>('/issues', { audit_id: auditId, url: pageUrl });
+    const issues = Array.isArray(data.issues)
+      ? data.issues.map((raw) => {
+          const r = raw as Record<string, unknown>;
+          return {
+            code: String(r.code ?? ''),
+            type: String(r.type ?? ''),
+            group: String(r.group ?? ''),
+            snippet: r.snippet,
+          };
+        })
+      : [];
+    return { url: String(data.url ?? pageUrl), issues };
+  } catch (err) {
+    console.log('[seRankingClient] getPageIssues failed for', pageUrl, ':', err);
+    return null;
+  }
 }

@@ -14,9 +14,12 @@ import { recordGa4Attempt } from '../lib/ga4Status.js';
 import { getPageSearchPerformance } from '../lib/gscClient.js';
 import { recordGscAttempt } from '../lib/gscStatus.js';
 import { setCachedPage } from '../lib/pageSeoCache.js';
+import { getPageIssues } from '../lib/seRankingClient.js';
 import { getProjectPull } from '../lib/seRankingProjectPull.js';
 import { currentSitePaths, projectedPaths } from '../lib/seoConfig.js';
 import type { PageSeoData, SourceStatus } from '../../src/data/seoTypes.js';
+
+const BASE_URL = 'https://callnublue.com';
 
 async function computeRealRow(path: string, force: boolean): Promise<{ row: PageSeoData; sources: SourceStatus }> {
   const [pull, ga4Result, gscResult] = await Promise.all([
@@ -38,7 +41,15 @@ async function computeRealRow(path: string, force: boolean): Promise<{ row: Page
   ]);
   await Promise.all([recordGa4Attempt(ga4Result.ok), recordGscAttempt(gscResult.ok)]);
 
-  const row = computePageRow(path, pull.keywordRows, pull.auditRows, ga4Result.value, gscResult.value, pull.ok);
+  // Real per-page issue detail (Site Audit "get all issues by URL") —
+  // a single-URL lookup SE Ranking's own docs list at 0 credits cost, so
+  // it's called fresh per page open rather than folded into the cached
+  // bulk pull. Needs pull.auditId, so it runs after the pull above
+  // resolves rather than in the same Promise.all; null when there's no
+  // audit at all (pull.auditId is null) or the call itself fails.
+  const pageIssues = pull.auditId != null ? await getPageIssues(pull.auditId, `${BASE_URL}${path}`) : null;
+
+  const row = computePageRow(path, pull.keywordRows, pull.auditRows, ga4Result.value, gscResult.value, pull.ok, pageIssues);
   await setCachedPage(path, row);
   return { row, sources: { seRanking: pull.ok, ga4: ga4Result.ok, gsc: gscResult.ok } };
 }

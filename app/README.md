@@ -114,26 +114,51 @@ alongside this — the Vite plugin already covers what that would do.
 |---|---|---|
 | `SERANKING_API_KEY` | seRankingClient.ts | Account → API in SE Ranking. Reused for both SE Ranking API surfaces below (transport differs, key doesn't) |
 | `SERANKING_API_BASE_URL` | seRankingClient.ts | optional override for the Data API (keyword positions); defaults to `https://api.seranking.com/v1` |
-| `SERANKING_AUDIT_API_BASE_URL` | seRankingClient.ts | optional override for the Website Audit API; defaults to `https://api.seranking.com/v1/project-management/audits` |
+| `SERANKING_AUDIT_API_BASE_URL` | seRankingClient.ts | optional override for the Website Audit "crawled pages" API; defaults to `https://api.seranking.com/v1/project-management/audits` |
+| `SERANKING_SITE_AUDIT_API_BASE_URL` | seRankingClient.ts | optional override for the Site Audit "get all issues by URL" API — a THIRD, separate base path; defaults to `https://api.seranking.com/v1/site-audit/audits` |
 | `GA4_PROPERTY_ID` | ga4Client.ts | numeric GA4 property ID |
 | `GA4_SERVICE_ACCOUNT_JSON` | ga4Client.ts, gscClient.ts | full service-account key JSON, as one string; shared by both GA4 and Search Console. Grant it Viewer on the GA4 property (Admin → Property Access Management), add it as a Search Console user (see below), and enable both the Analytics Data API and the Search Console API on its GCP project. **Set this in the Netlify dashboard, not via `netlify env:set`/the API** — a multi-line secret like this needs the dashboard's own multi-line field; other paths have corrupted it in practice. |
 | `GSC_SITE_URL` | gscClient.ts | the exact Search Console property string, e.g. `sc-domain:callnublue.com` for a Domain property, or `https://callnublue.com/` for a URL-prefix property — must match how the property is registered in Search Console. callnublue.com is a Domain property, so this is set to `sc-domain:callnublue.com` |
 
-There's no `SERANKING_PROJECT_ID` — neither SE Ranking API surface used
-here has a "project" concept. `getKeywordPositions` (Data API, confirmed
-against `github.com/seranking/openapi`) calls
+There's no `SERANKING_PROJECT_ID` — none of SE Ranking's three API
+surfaces used here have a "project" concept (the `SERANKING_PROJECT_ID`
+env var is a leftover from an earlier, wrong guess; harmless to leave
+set, unused by any current code path). `getKeywordPositions` (Data API,
+confirmed against `github.com/seranking/openapi`) calls
 `GET /domain/keywords?domain=callnublue.com` directly, auth via an
-`apikey` query param. `getPageAudit` (Website Audit API, confirmed
-against SE Ranking's own published Website Audit docs — not covered by
+`apikey` query param — **this one's Domain Analysis data has been
+coming back all zero/empty in practice**, which is why the inspector's
+potential-search-volume/opportunity/keyword-count section is currently
+hidden rather than shown full of misleading zeros; the code is still
+there, just not rendered, pending sorting out why the account's keyword
+data isn't showing up. `getPageAudit` (Website Audit "crawled pages"
+API, confirmed against SE Ranking's own published docs — not covered by
 the OpenAPI spec above) calls `GET /project-management/audits?search=callnublue.com`
 to find the account's existing Website Audit for this domain (auth via an
 `Authorization: Token API_KEY` header — a different transport from the
 Data API), then pages through that audit's `/project-management/audits/pages`
 for the full crawled-page list (title/description/H1 duplicates, word
-count, indexability, HTTP status, etc.). A per-page content score and
-issue list are derived from those real fields in `seRankingClient.ts`
-(`scoreFor`/`issuesFor`) since the API doesn't return a single 0-100
-score directly.
+count, indexability, HTTP status, etc.) — every field this endpoint
+returns comes back as a **string**, booleans included (`"title_duplicate":
+"0"`), which is a real bug this repo hit: a bare truthy check on that
+string flagged every page as a duplicate. See `isTruthyFlag` in
+`seRankingClient.ts`. A per-page content score and issue-count summary
+are derived from those real fields (`scoreFor`/`issuesFor`) since this
+endpoint doesn't return a single 0-100 score or a free-text issue list
+directly.
+
+`getPageIssues` (Site Audit "get all issues by URL" — **note the
+different base path**, `site-audit/audits` rather than
+`project-management/audits`, same header auth) is the actual per-page
+"what's wrong and why" data: `GET /issues?audit_id=&url=` returns the
+real list of specific issues (a machine `code` like `css_big`, a
+severity, a category, and a `snippet` of concrete evidence) for one
+exact URL. Unlike the other two SE Ranking calls, this one is cheap
+enough (SE Ranking's own docs list it at 0 credits) to call fresh per
+page open rather than folding into the cached bulk pull — see
+`get-page-seo.mts`. This is what backs the inspector's "Website Audit
+Issues" section, and is gated on its own success independent of the
+(currently hidden) Domain Analysis section above.
 
 **⚠️ Data API response field names aren't fully confirmed.** Its auth
 (`apikey` as a query param, not a header — the original guess had this

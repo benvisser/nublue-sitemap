@@ -2,10 +2,10 @@
 // one path at a time. See seRankingProjectPull.ts, ga4Client.ts, and
 // gscClient.ts for where keywordRows/auditRows/traffic/search performance
 // actually come from; this file only does the math once you have them.
-import { computeLocalSeoScore, type KeywordQuery, type PageSeoData } from '../../src/data/seoTypes.js';
+import { computeLocalSeoScore, type AuditIssue, type KeywordQuery, type PageSeoData } from '../../src/data/seoTypes.js';
 import type { PageTraffic } from './ga4Client.js';
 import type { PageSearchPerformance } from './gscClient.js';
-import type { SeRankingAuditPage, SeRankingKeywordRow } from './seRankingClient.js';
+import type { SeRankingAuditPage, SeRankingKeywordRow, SeRankingPageIssues } from './seRankingClient.js';
 
 const PROJECTION_FACTOR = 0.15; // future page starts at ~15% of its parent's potential traffic
 
@@ -15,6 +15,46 @@ function estimateClicks(volume: number, position: number): number {
   const ctrByPosition: Record<number, number> = { 1: 0.28, 2: 0.15, 3: 0.1, 4: 0.07, 5: 0.05 };
   const ctr = ctrByPosition[position] ?? (position <= 10 ? 0.03 : position <= 20 ? 0.01 : 0.003);
   return Math.round(volume * ctr);
+}
+
+/** SE Ranking's per-issue `snippet` shape varies by issue code (a list of
+ * redirecting URLs, an oversized file with its size, etc.) — this turns
+ * whatever comes back into one readable line rather than the UI needing
+ * to know every shape. Falls back to nothing rather than guessing at a
+ * shape it doesn't recognize. */
+function summarizeSnippet(snippet: unknown): string {
+  if (!snippet || typeof snippet !== 'object') return '';
+  const value = (snippet as { value?: unknown }).value;
+  if (!Array.isArray(value) || value.length === 0) return '';
+  const first = value[0];
+  if (!first || typeof first !== 'object') return String(value.length);
+  const f = first as Record<string, unknown>;
+  const parts: string[] = [];
+  if (f.url) parts.push(String(f.url));
+  if (f.status) parts.push(`(${f.status})`);
+  if (f.size) parts.push(`${Math.round(Number(f.size) / 1024).toLocaleString()}KB`);
+  const summary = parts.join(' ');
+  const remaining = value.length - 1;
+  return remaining > 0 ? `${summary} +${remaining} more` : summary;
+}
+
+/** Turns a code like "css_big" into "Css big" — not a real translation
+ * of SE Ranking's issue codes (they don't publish a code → label
+ * dictionary), just enough to read as words instead of a snake_case
+ * token until/unless a real mapping is worth building. */
+function humanizeCode(code: string): string {
+  const words = code.replace(/_/g, ' ');
+  return words.charAt(0).toUpperCase() + words.slice(1);
+}
+
+function mapIssues(pageIssues: SeRankingPageIssues | null): AuditIssue[] | null {
+  if (!pageIssues) return null;
+  return pageIssues.issues.map((i) => ({
+    code: humanizeCode(i.code),
+    severity: i.type,
+    group: i.group,
+    detail: summarizeSnippet(i.snippet),
+  }));
 }
 
 function recommendationsFor(row: PageSeoData): string[] {
@@ -42,6 +82,7 @@ export function computePageRow(
   traffic: PageTraffic | null,
   search: PageSearchPerformance | null,
   seRankingOk: boolean,
+  pageIssues: SeRankingPageIssues | null = null,
 ): PageSeoData {
   const row: PageSeoData = {
     path,
@@ -66,6 +107,7 @@ export function computePageRow(
     top3Keywords: 0,
     issues: [],
     auditDetail: null,
+    auditIssues: mapIssues(pageIssues),
     topQueries: [],
     recommendations: [],
     projected: false,
@@ -135,6 +177,7 @@ export function computeProjectedRow(path: string, parent: PageSeoData | null): P
     top3Keywords: 0,
     issues: [],
     auditDetail: null,
+    auditIssues: null,
     topQueries: parent ? parent.topQueries.slice(0, 3) : [],
     recommendations: ["Build out content once this page ships — projected from the parent page's query cluster"],
     projected: true,

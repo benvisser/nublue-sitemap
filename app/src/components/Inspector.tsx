@@ -3,7 +3,7 @@ import { BASE_URL } from '../data/sitemapTree';
 import { usePageSeo } from '../hooks/usePageSeo';
 import { formatDelta, formatNumber, formatPercent, formatSeconds } from '../lib/format';
 import { LinkIcon, RefreshIcon } from './LinkIcon';
-import { Ga4Icon, SearchConsoleIcon } from './SourceIcons';
+import { Ga4Icon, SearchConsoleIcon, SeRankingIcon } from './SourceIcons';
 
 interface InspectorProps {
   node: PageNode;
@@ -54,7 +54,8 @@ export function Inspector({ node, onClose, onLoaded }: InspectorProps) {
   // just stops the inspector from showing its all-zero cards.
   const ga4Live = Boolean(result?.sources.ga4);
   const gscLive = Boolean(result?.sources.gsc);
-  const anyLive = ga4Live || gscLive;
+  const auditIssuesLive = row?.auditIssues != null;
+  const anyLive = ga4Live || gscLive || auditIssuesLive;
 
   return (
     <>
@@ -231,15 +232,39 @@ export function Inspector({ node, onClose, onLoaded }: InspectorProps) {
             </SourceGroup>
           )}
 
-          {/* SE Ranking (keyword volume/opportunity/content score/Website
-              Audit) is temporarily removed from the panel — the account's
-              data was coming back all zero/empty for every field, so a
-              section full of "0"s and em-dashes was worse than not
-              showing it. GA4 and Search Console are unaffected. To bring
-              it back once SE Ranking's own account/API access is sorted
-              out: restore the SourceGroup that used to sit here (see git
-              history — "none of this is working, remove for now"), and
-              re-add `seRankingLive`/`anyLive` and the badge above. */}
+          {/* SE Ranking's keyword volume/opportunity/content score/Website
+              Audit summary is still hidden — that account's Domain
+              Analysis data was coming back all zero/empty (see git
+              history — "none of this is working, remove for now"). This
+              section is a separate, narrower thing: real per-page issue
+              detail from the Site Audit "get all issues by URL"
+              endpoint, gated on its own success rather than the broader
+              (still broken) SE Ranking status above. */}
+          {status === 'ready' && row && auditIssuesLive && (
+            <SourceGroup icon={<SeRankingIcon />} label="Website Audit Issues" tone="seranking">
+              {row.auditIssues!.length === 0 ? (
+                <span className="gauge-row__label">No issues found on this page — clean crawl.</span>
+              ) : (
+                <>
+                  <span className="gauge-row__label">{row.auditIssues!.length} issue(s) found by SE Ranking's crawler</span>
+                  <div className="query-table-scroll">
+                    <ul className="audit-issue-list">
+                      {row.auditIssues!.map((issue, i) => (
+                        <li key={`${issue.code}-${i}`} className="audit-issue">
+                          <span className={`audit-issue__severity audit-issue__severity--${issue.severity}`}>{issue.severity}</span>
+                          <span className="audit-issue__body">
+                            <strong>{issue.code}</strong>
+                            <span className="audit-issue__group"> · {issue.group}</span>
+                            {issue.detail && <span className="audit-issue__detail">{issue.detail}</span>}
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                </>
+              )}
+            </SourceGroup>
+          )}
         </div>
       </aside>
     </>
