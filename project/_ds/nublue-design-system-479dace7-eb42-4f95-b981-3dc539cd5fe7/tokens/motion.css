@@ -1,0 +1,9 @@
+:root{
+--dur-fast:120ms; /* @kind other */
+--dur:200ms; /* @kind other */
+--dur-slow:400ms; /* @kind other */
+--ease:cubic-bezier(.4,0,.2,1); /* @kind other */
+--ease-out:cubic-bezier(0,0,.2,1); /* @kind other */
+--transition-button:background-color var(--dur) var(--ease),color var(--dur) var(--ease),border-color var(--dur) var(--ease); /* @kind other */
+--press-scale:0.98; /* @kind other */
+}

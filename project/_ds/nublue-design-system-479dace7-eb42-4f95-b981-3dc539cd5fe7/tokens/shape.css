@@ -1,0 +1,19 @@
+:root{
+--radius-none:0px;
+--radius-sm:4px;
+--radius-md:8px;
+--radius-lg:12px;
+--radius-photo:16px;
+--radius-pill:999px;
+--radius-circle:50%;
+
+--border-width:1px; /* @kind other */
+--border-width-strong:2px; /* @kind other */
+
+/* The site is flat. Shadows are rare, soft, and only used to lift a floating element. */
+--shadow-none:none;
+--shadow-soft:0 4px 18px rgba(21,26,66,.08);
+--shadow-lift:0 10px 30px rgba(21,26,66,.12);
+--shadow-header:0 2px 12px rgba(21,26,66,.14);
+--focus-ring:0 0 0 3px rgba(63,144,207,.45); /* @kind shadow */
+}

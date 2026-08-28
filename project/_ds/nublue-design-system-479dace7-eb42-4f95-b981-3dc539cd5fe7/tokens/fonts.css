@@ -1,0 +1,3 @@
+/* Outfit — the single NuBlue typeface. Served from Google Fonts (no local binaries were provided). */
+@import url("https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap");
+:root{--font-sans:"Outfit","Helvetica Neue",Arial,sans-serif;--font-display:"Outfit","Helvetica Neue",Arial,sans-serif}

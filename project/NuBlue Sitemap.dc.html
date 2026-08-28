@@ -1,0 +1,459 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="stylesheet" href="_ds/nublue-design-system-479dace7-eb42-4f95-b981-3dc539cd5fe7/tokens/fonts.css">
+<link rel="stylesheet" href="_ds/nublue-design-system-479dace7-eb42-4f95-b981-3dc539cd5fe7/tokens/colors.css">
+<link rel="stylesheet" href="_ds/nublue-design-system-479dace7-eb42-4f95-b981-3dc539cd5fe7/tokens/typography.css">
+<link rel="stylesheet" href="_ds/nublue-design-system-479dace7-eb42-4f95-b981-3dc539cd5fe7/tokens/spacing.css">
+<link rel="stylesheet" href="_ds/nublue-design-system-479dace7-eb42-4f95-b981-3dc539cd5fe7/tokens/shape.css">
+<link rel="stylesheet" href="_ds/nublue-design-system-479dace7-eb42-4f95-b981-3dc539cd5fe7/tokens/motion.css">
+<link rel="stylesheet" href="_ds/nublue-design-system-479dace7-eb42-4f95-b981-3dc539cd5fe7/tokens/base.css">
+<link rel="stylesheet" href="_ds/nublue-design-system-479dace7-eb42-4f95-b981-3dc539cd5fe7/styles.css">
+<script src="_ds/nublue-design-system-479dace7-eb42-4f95-b981-3dc539cd5fe7/_ds_bundle.js"></script>
+<style>
+  html, body { margin:0; padding:0; background:#F1F1F1; }
+  a { color:#DC3030; text-decoration:none; }
+  a:hover { color:#B92222; }
+  ::-webkit-scrollbar { width:12px; height:12px; }
+  ::-webkit-scrollbar-thumb { background:#B4B4B4; border-radius:999px; border:3px solid #F1F1F1; }
+</style>
+</helmet>
+<div style="font-family:Outfit, system-ui, sans-serif; color:#151A42; height:100vh; display:flex; flex-direction:column; background:#F1F1F1; overflow:hidden">
+
+  <header style="flex:0 0 auto; background:#151A42; color:#FFFFFF; padding:16px 24px; display:flex; align-items:center; gap:28px; flex-wrap:wrap">
+    <div style="display:flex; flex-direction:column; gap:2px">
+      <span style="font-size:12px; font-weight:500; letter-spacing:0.14em; text-transform:uppercase; color:#7BC7F8">NuBlue Electric, Plumbing &amp; Air</span>
+      <span style="font-size:22px; font-weight:700; letter-spacing:-0.01em">Website Sitemap</span>
+    </div>
+
+    <div style="display:flex; gap:6px; padding:4px; background:rgba(255,255,255,.08); border-radius:999px">
+      <button type="button" onClick="{{ showCurrent }}" style="border:0; cursor:pointer; font:700 12px/1 Outfit, sans-serif; letter-spacing:0.06em; text-transform:uppercase; padding:10px 16px; border-radius:999px; background:{{ curBg }}; color:{{ curFg }}">Current Site</button>
+      <button type="button" onClick="{{ showFuture }}" style="border:0; cursor:pointer; font:700 12px/1 Outfit, sans-serif; letter-spacing:0.06em; text-transform:uppercase; padding:10px 16px; border-radius:999px; background:{{ futBg }}; color:{{ futFg }}">Future State</button>
+    </div>
+
+    <div style="display:flex; gap:6px; padding:4px; background:rgba(255,255,255,.08); border-radius:999px">
+      <button type="button" onClick="{{ showMap }}" style="border:0; cursor:pointer; font:700 12px/1 Outfit, sans-serif; letter-spacing:0.06em; text-transform:uppercase; padding:10px 16px; border-radius:999px; background:{{ mapBg }}; color:{{ mapFg }}">Node Map</button>
+      <button type="button" onClick="{{ showList }}" style="border:0; cursor:pointer; font:700 12px/1 Outfit, sans-serif; letter-spacing:0.06em; text-transform:uppercase; padding:10px 16px; border-radius:999px; background:{{ listBg }}; color:{{ listFg }}">List View</button>
+    </div>
+
+    <div style="display:flex; align-items:center; gap:18px; margin-left:auto; flex-wrap:wrap">
+      <div style="display:flex; align-items:center; gap:8px; font-size:13px; color:rgba(255,255,255,.85)">
+        <span style="width:9px; height:9px; border-radius:999px; background:#2FA84F; display:inline-block"></span>
+        <span>Live page</span>
+        <span style="width:9px; height:9px; border-radius:999px; background:#FBBC04; display:inline-block; margin-left:10px"></span>
+        <span>New page</span>
+        <span style="width:12px; height:12px; border-radius:4px; border:1px dashed rgba(255,255,255,.7); display:inline-block; margin-left:10px"></span>
+        <span>Collapsed group</span>
+      </div>
+      <div style="display:flex; align-items:center; gap:6px">
+        <button type="button" onClick="{{ zoomOut }}" style="width:34px; height:34px; border:0; border-radius:999px; cursor:pointer; background:#E7F3FF; color:#151A42; font:700 18px/1 Outfit, sans-serif">−</button>
+        <span style="font-size:13px; font-weight:600; min-width:46px; text-align:center; color:rgba(255,255,255,.9)">{{ zoomLabel }}</span>
+        <button type="button" onClick="{{ zoomIn }}" style="width:34px; height:34px; border:0; border-radius:999px; cursor:pointer; background:#E7F3FF; color:#151A42; font:700 18px/1 Outfit, sans-serif">+</button>
+        <button type="button" onClick="{{ zoomReset }}" style="height:34px; padding:0 14px; border:0; border-radius:999px; cursor:pointer; background:rgba(255,255,255,.14); color:#FFFFFF; font:700 11px/1 Outfit, sans-serif; letter-spacing:0.06em; text-transform:uppercase">Fit</button>
+      </div>
+    </div>
+  </header>
+
+  <div style="flex:0 0 auto; height:10px; background:linear-gradient(90deg,#7BC7F8 0%,#3F90CF 50%,#151A42 100%)"></div>
+
+  <div style="flex:0 0 auto; background:#FFFFFF; border-bottom:1px solid #E3E3E3; padding:12px 24px; display:flex; align-items:center; gap:24px; flex-wrap:wrap">
+    <span style="font-size:15px; font-weight:600">{{ versionTitle }}</span>
+    <span style="font-size:14px; color:rgba(21,26,66,.7)">{{ countLabel }}</span>
+    <div style="display:flex; gap:10px; margin-left:auto">
+      <button type="button" onClick="{{ expandAll }}" style="border:2px solid #DC3030; background:#FFFFFF; color:#DC3030; cursor:pointer; font:700 11px/1 Outfit, sans-serif; letter-spacing:0.05em; text-transform:uppercase; padding:9px 16px; border-radius:999px">Expand All</button>
+      <button type="button" onClick="{{ collapseAll }}" style="border:2px solid #151A42; background:#FFFFFF; color:#151A42; cursor:pointer; font:700 11px/1 Outfit, sans-serif; letter-spacing:0.05em; text-transform:uppercase; padding:9px 16px; border-radius:999px">Collapse All</button>
+    </div>
+  </div>
+
+  <sc-if value="{{ isMap }}" hint-placeholder-val="{{ true }}">
+    <div ref="{{ scrollRef }}" style="flex:1 1 auto; overflow:auto; background:#F1F1F1; cursor:grab; position:relative">
+      <div style="width:{{ sw }}px; height:{{ sh }}px; position:relative">
+        <div style="position:absolute; left:0; top:0; transform:scale({{ zoom }}); transform-origin:0 0; width:{{ cw }}px; height:{{ ch }}px; padding:32px 40px; box-sizing:content-box">
+          <svg width="{{ cw }}" height="{{ ch }}" style="position:absolute; left:40px; top:32px; overflow:visible; pointer-events:none">
+            <sc-for list="{{ edges }}" as="e" hint-placeholder-count="6">
+              <path d="{{ e.d }}" fill="none" stroke="#B7DEFB" stroke-width="1.5"></path>
+            </sc-for>
+          </svg>
+          <div style="position:absolute; left:40px; top:32px; width:{{ cw }}px; height:{{ ch }}px">
+            <sc-for list="{{ pages }}" as="n" hint-placeholder-count="10">
+              <div style="position:absolute; left:0; top:0; transform:translate3d({{ n.x }}px, {{ n.y }}px, 0); width:250px; height:38px; box-sizing:border-box; display:flex; align-items:center; gap:9px; padding:0 8px 0 11px; background:#FFFFFF; border:1px solid #E3E3E3; border-radius:8px">
+                <span style="width:9px; height:9px; flex:0 0 auto; border-radius:999px; background:{{ n.dot }}"></span>
+                <span title="{{ n.path }}" style="flex:1 1 auto; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:13.5px; font-weight:{{ n.fw }}; letter-spacing:-0.005em">{{ n.name }}</span>
+                <sc-if value="{{ n.hasKids }}" hint-placeholder-val="{{ false }}">
+                  <button type="button" onClick="{{ n.onToggle }}" title="Expand or collapse children" style="flex:0 0 auto; border:0; cursor:pointer; background:#E7F3FF; color:#151A42; border-radius:999px; height:20px; min-width:26px; padding:0 6px; font:700 10px/1 Outfit, sans-serif">{{ n.toggleLabel }}</button>
+                </sc-if>
+                <sc-if value="{{ n.url }}" hint-placeholder-val="{{ true }}">
+                  <a href="{{ n.href }}" target="_blank" rel="noopener" title="Open {{ n.path }}" style="flex:0 0 auto; display:flex; align-items:center; justify-content:center; width:22px; height:22px; border-radius:999px; color:#3F90CF" style-hover="background:#E7F3FF; color:#151A42">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path><polyline points="15 3 21 3 21 9"></polyline><line x1="10" y1="14" x2="21" y2="3"></line></svg>
+                  </a>
+                </sc-if>
+              </div>
+            </sc-for>
+            <sc-for list="{{ clusters }}" as="n" hint-placeholder-count="3">
+              <div style="position:absolute; left:0; top:0; transform:translate3d({{ n.x }}px, {{ n.y }}px, 0); width:250px; height:38px; box-sizing:border-box; display:flex; align-items:center; gap:9px; padding:0 8px 0 11px; background:#E7F3FF; border:1px dashed #3F90CF; border-radius:8px">
+                <span style="flex:1 1 auto; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:13px; font-weight:600; color:#151A42">{{ n.name }}</span>
+                <span style="flex:0 0 auto; font-size:11px; font-weight:600; color:rgba(21,26,66,.65)">{{ n.countLabel }}</span>
+                <button type="button" onClick="{{ n.onToggle }}" title="Expand or collapse group" style="flex:0 0 auto; border:0; cursor:pointer; background:#151A42; color:#FFFFFF; border-radius:999px; height:20px; min-width:26px; padding:0 7px; font:700 10px/1 Outfit, sans-serif">{{ n.toggleLabel }}</button>
+              </div>
+            </sc-for>
+          </div>
+        </div>
+      </div>
+    </div>
+  </sc-if>
+
+  <sc-if value="{{ isList }}" hint-placeholder-val="{{ false }}">
+    <div style="flex:1 1 auto; overflow:auto; background:#FFFFFF">
+      <div style="max-width:1240px; margin:0 auto; padding:24px">
+        <input type="text" value="{{ query }}" onInput="{{ onQuery }}" placeholder="Filter pages by name or URL path" style="width:100%; box-sizing:border-box; font:400 15px/1.4 Outfit, sans-serif; color:#151A42; padding:12px 14px; border:1px solid #E3E3E3; border-radius:4px; margin-bottom:18px" />
+        <div style="display:flex; flex-direction:column">
+          <sc-for list="{{ listRows }}" as="r" hint-placeholder-count="14">
+            <div style="display:flex; align-items:center; gap:12px; padding:9px 0; border-bottom:1px solid #E3E3E3">
+              <span style="width:9px; height:9px; flex:0 0 auto; border-radius:999px; background:{{ r.dot }}"></span>
+              <span style="flex:0 0 auto; width:{{ r.indent }}px"></span>
+              <span style="flex:0 0 auto; font-size:15px; font-weight:{{ r.fw }}">{{ r.name }}</span>
+              <span style="flex:1 1 auto; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:13px; color:rgba(21,26,66,.55); text-align:right">{{ r.path }}</span>
+              <sc-if value="{{ r.url }}" hint-placeholder-val="{{ true }}">
+                <a href="{{ r.href }}" target="_blank" rel="noopener" style="flex:0 0 auto; display:flex; align-items:center; justify-content:center; width:26px; height:26px; border-radius:999px; color:#3F90CF" style-hover="background:#E7F3FF; color:#151A42">
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path><polyline points="15 3 21 3 21 9"></polyline><line x1="10" y1="14" x2="21" y2="3"></line></svg>
+                </a>
+              </sc-if>
+            </div>
+          </sc-for>
+        </div>
+        <p style="font-size:13px; color:rgba(21,26,66,.55); margin:18px 0 40px">City service pages follow the <strong>/service/city/</strong> pattern. A handful of legacy URLs differ and will redirect.</p>
+      </div>
+    </div>
+  </sc-if>
+</div>
+
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;initialVersion&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;current&quot;,&quot;future&quot;],&quot;default&quot;:&quot;current&quot;,&quot;tsType&quot;:&quot;'current' | 'future'&quot;},&quot;initialView&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;map&quot;,&quot;list&quot;],&quot;default&quot;:&quot;map&quot;,&quot;tsType&quot;:&quot;'map' | 'list'&quot;},&quot;expandDepth&quot;:{&quot;editor&quot;:&quot;int&quot;,&quot;default&quot;:2,&quot;min&quot;:1,&quot;max&quot;:5,&quot;tsType&quot;:&quot;number&quot;}}">
+const BASE = 'https://callnublue.com';
+const CITY = [['Charlotte', 'charlotte'], ['Fayetteville', 'fayetteville'], ['Greenville', 'greenville'], ['Lake Norman', 'lake-norman']];
+const P = (name, url, children) => ({ name, url: url || null, children: children || [] });
+const NEWP = (name, url, children) => ({ name, url: url || null, isNew: true, children: children || [] });
+const CL = (name, children, note) => ({ name, kind: 'cluster', children: children || [], note: note || null });
+const cities = (b) => CL('City pages', CITY.map(([n, s]) => P(n + ', NC', b + s + '/')));
+
+const BLOG_SAMPLE = [
+  ['Surge Protection Explained: What Actually Protects Your Home', '/blog/surge-protection-explained-what-actually-protects-your-home-and-what-doesnt/'],
+  ['Indoor Air Quality in Winter', '/blog/indoor-air-quality-in-winter-how-dirty-filters-and-poor-airflow-affect-your-health/'],
+  ['Old Electrical Panels and Overloaded Circuits', '/blog/old-electrical-panels-and-overloaded-circuits-why-january-is-the-smart-time-to-inspect/'],
+  ['Tree Roots, Old Pipes, and Spring Rain', '/blog/tree-roots-old-pipes-and-spring-rain-why-sewer-problems-spike-this-time-of-year/'],
+  ['Low Water Pressure in Winter', '/blog/low-water-pressure-in-winter-what-it-means-for-your-plumbing-system/'],
+  ['What to Look for in a Home Service Company', '/blog/what-to-look-for-in-a-home-service-company-trust-transparency-and-preventative-care/'],
+  ['Outdoor Electrical Upgrades for Spring', '/blog/outdoor-electrical-upgrades-for-spring-lighting-fans-and-safety-checks/'],
+  ['Why Does My Breaker Keep Tripping?', '/blog/why-does-my-breaker-keep-tripping-and-why-its-common-in-january/'],
+  ['Why Every Homeowner Should Test Their Water', '/blog/what-your-water-says-about-your-home-why-every-homeowner-should-test-their-water/'],
+  ['Reactive vs. Proactive Home Maintenance', '/blog/reactive-vs-proactive-home-maintenance/'],
+  ['Gas Lines for Generators in North Carolina', '/blog/what-north-carolina-homeowners-should-know-about-gas-lines-for-generators/'],
+  ['NuBlue Brings HVAC and Air Services to Fayetteville', '/blog/nublue-brings-hvac-and-air-services-to-fayetteville/'],
+  ['The Market Leader Journey: Aaron Williams', '/blog/the-market-leader-journey-case-study-aaron-williams/'],
+  ['Four Warning Signs That Your Furnace Needs Repairs', '/blog/four-warning-signs-your-furnace-needs-repairs/'],
+  ['5 Plumbing Tips to Get You Through The Holiday Season', '/blog/5-plumbing-tips-to-get-you-through-holiday-season/'],
+  ['Everything You Should Know About EV Charger Installation', '/blog/everything-you-should-know-about-ev-charger-installation/'],
+  ['How to Fix Low Water Pressure in Your Home', '/blog/tips-to-fix-low-water-pressure-in-your-home/'],
+  ['Signs You Might Need a New HVAC System', '/blog/signs-you-might-need-a-new-hvac-system/'],
+  ['10 Reasons For A Whole Home Generator', '/blog/reasons-charlotte-homeowners-need-whole-home-generator/'],
+  ['When to Call an Emergency Plumber', '/blog/when-to-call-an-emergency-plumber/']
+];
+
+class Component extends DCLogic {
+  state = { version: null, view: null, zoom: 0.85, collapsed: {}, query: '' };
+
+  // ---------- data ----------
+  build(version) {
+    const future = version === 'future';
+
+    const blog = P('Blog', '/blog/', [
+      CL('Blog posts', BLOG_SAMPLE.map(([n, u]) => P(n, u)).concat([P('… 150 more posts', '/blog/')]), '170 pages')
+    ]);
+
+    const about = P('About Us', '/about/', [
+      P('Our Team', '/about/meet-the-team/'),
+      P('Careers', '/careers/'),
+      P('Why We Love Working at NuBlue', '/why-we-love-working-at-nublue-team-culture-values/'),
+      P('NuBlue Gives Back', '/nublue-gives-back'),
+      P('Reviews', '/reviews/'),
+      P('Coupons', '/coupons/'),
+      P('Financing', '/financing/'),
+      blog
+    ]);
+
+    const plumbing = P('Plumbing', '/plumbing/', [
+      P('Drain & Sewer', '/drain-sewer/', [
+        P('Drain Cleaning', '/drain-sewer/cleaning/', [
+          P('Hydro Jetting', '/drain-sewer/cleaning/hydro-jetting/', [cities('/drain-sewer/cleaning/hydro-jetting/')]),
+          cities('/drain-sewer/cleaning/')
+        ]),
+        P('Sewer Line Repair', '/drain-sewer/repair/', [cities('/drain-sewer/repair/')]),
+        P('Trenchless Pipe Lining', '/drain-sewer/trenchless-pipe-lining/'),
+        P('Sump Pumps', '/drain-sewer/sump-pumps/', [cities('/drain-sewer/sump-pumps/')]),
+        P('Septic', '/drain-sewer/septic/', [cities('/drain-sewer/septic/')]),
+        cities('/drain-sewer/')
+      ]),
+      P('Water Heaters', '/water-heaters/', [
+        P('Water Heater Installation', '/water-heaters/installation/', [cities('/water-heaters/installation/')]),
+        P('Water Heater Repair', '/water-heaters/repair/', [cities('/water-heaters/repair/')]),
+        P('Tankless Water Heaters', '/water-heaters/tankless/', [cities('/water-heaters/tankless/')]),
+        cities('/water-heaters/')
+      ]),
+      P('Repiping', '/plumbing/repiping/', [cities('/plumbing/repiping/')]),
+      P('Backflow Testing & Installation', '/plumbing/backflow/'),
+      P('Garbage Disposals', '/plumbing/garbage-disposals/', [cities('/plumbing/garbage-disposals/')]),
+      P('Well Pumps', '/plumbing/well-pumps/', [cities('/plumbing/well-pumps/')]),
+      P('Whole-House Water Filtration', '/plumbing/whole-house-water-filtration-systems/', [cities('/plumbing/whole-house-water-filtration-systems/')]),
+      P('Gas Lines', '/plumbing/gas-lines/', [cities('/plumbing/gas-lines/')]),
+      P('Poly B Pipe Replacement', '/plumbing/poly-b-pipe-replacement-charlotte'),
+      P('Faucet Repair', '/plumbing/faucet-repair/charlotte'),
+      P('Residential Plumbing', '/plumbing/plumbing-residential/'),
+      P('Commercial Plumbing', '/plumbing/commercial/', [cities('/plumbing/commercial/')]),
+      P('Emergency Plumbing', '/plumbing/plumbing-emergency/', [cities('/plumbing/plumbing-emergency/')]),
+      cities('/plumbing/')
+    ]);
+
+    const air = P('Air', '/hvac/', [
+      P('Air Conditioning', '/air-conditioning/', [
+        P('AC Repair', '/air-conditioning/repair/', [cities('/air-conditioning/repair/')]),
+        P('AC Installation', '/air-conditioning/installation/', [cities('/air-conditioning/installation/')]),
+        P('Ductless AC', '/air-conditioning/ductless/', [cities('/air-conditioning/ductless/')]),
+        P('AC Inspections', '/air-conditioning/inspections/'),
+        cities('/air-conditioning/')
+      ]),
+      P('Heating', '/heating/', [
+        P('Heating Repair', '/heating/repair/', [cities('/heating/repair/')]),
+        P('Heating Installation', '/heating/installation/', [cities('/heating/installation/')]),
+        P('Furnaces', '/heating/furnaces/', [cities('/heating/furnaces/')]),
+        cities('/heating/')
+      ]),
+      P('Heat Pumps', '/heat-pumps/', [cities('/heat-pumps/')]),
+      P('Air Ducts', '/hvac/air-ducts/'),
+      P('Air Handlers', '/air-handlers/'),
+      P('Indoor Air Quality', '/air-quality/', [cities('/air-quality/')]),
+      P('Attic & Crawl Space', '/crawl-space/', [cities('/crawl-space/')]),
+      P('Commercial HVAC', '/hvac/commercial/'),
+      P('Emergency HVAC', '/hvac/emergency-services/'),
+      cities('/hvac/')
+    ]);
+
+    const electrical = P('Electrical', '/electrical/', [
+      P('Electrical Installations', '/electrical/installation/', [cities('/electrical/installation/')]),
+      P('Electrical Repair', '/electrical/repair/', [cities('/electrical/repair/')]),
+      P('Electrical Maintenance', '/electrical/maintenance/', [cities('/electrical/maintenance/')]),
+      P('Electrical Inspections', '/electrical/inspections/', [cities('/electrical/inspections/')]),
+      P('Electrical Panels', '/electrical/panels/', [
+        P('Panel Repair', '/electrical/panels/repair/', [cities('/electrical/panels/repair/')]),
+        P('Panel Replacement', '/electrical/panels/replacement/', [cities('/electrical/panels/replacement/')]),
+        P('Circuit Breakers', '/electrical/panels/circuits/', [cities('/electrical/panels/circuits/')]),
+        cities('/electrical/panels/')
+      ]),
+      P('Wiring & Rewiring', '/electrical/wiring/', [
+        P('Outlet Wiring', '/electrical/wiring/outlets/', [cities('/electrical/wiring/outlets/')]),
+        cities('/electrical/wiring/')
+      ]),
+      P('Surge Protection', '/electrical/surge-protection/', [cities('/electrical/surge-protection/')]),
+      P('Generators', '/electrical/generators/', [
+        P('Generator Installation', '/electrical/generators/installation/', [cities('/electrical/generators/installation/')]),
+        P('Generator Repair', '/electrical/generators/repair/', [cities('/electrical/generators/repair/')]),
+        cities('/electrical/generators/')
+      ]),
+      P('Lighting', '/electrical/lighting/', [
+        P('Outdoor & Exterior Lighting', '/electrical/lighting/exterior/', [
+          P('Dock Lighting & Electrical', '/electrical/lighting/docks/'),
+          P('Landscape Lighting', '/electrical/lighting/landscape/'),
+          cities('/electrical/lighting/exterior/')
+        ]),
+        cities('/electrical/lighting/')
+      ]),
+      P('EV Charger Installation', '/electrical/ev-chargers/', [
+        P('Level 3 EV Chargers', '/electrical/ev-chargers/level-3/', [cities('/electrical/ev-chargers/level-3/')]),
+        cities('/electrical/ev-chargers/')
+      ]),
+      P('Outdoor Electrical Services', '/electrical/outdoor/'),
+      P('Commercial Electrical', '/electrical/commercial/', [cities('/electrical/commercial/')]),
+      P('Emergency Electrical', '/electrical/emergency-services/'),
+      cities('/electrical/')
+    ]);
+
+    const areaKids = [
+      P('Charlotte', '/service-area/charlotte/'),
+      P('Lake Norman', '/service-area/cornelius/'),
+      P('Greenville, NC', '/service-area/greenville/'),
+      P('Fayetteville, NC', '/service-area/fayetteville/'),
+      P('Davidson, NC (HVAC)', '/service-area/hvac/davidson-nc/'),
+      P('Zip Code Lookup', '/zip-code-lookup/')
+    ];
+    if (future) {
+      areaKids.splice(2, 0,
+        NEWP('Huntersville, NC', '/service-area/huntersville/'),
+        NEWP('Mooresville, NC', '/service-area/mooresville/'),
+        NEWP('Matthews, NC', '/service-area/matthews/')
+      );
+    }
+    const serviceArea = P('Service Area', '/service-area/', areaKids);
+
+    const nushield = P('NuShield Protection Plan', '/nushield', [P('Membership Plans', '/memberships/')]);
+
+    const contact = P('Contact Us', '/contact-us/', [
+      P('Book Online', '/book-online/'),
+      P('Bell Cow Online Scheduler', '/bellcow-book-online'),
+      P('Service Request — Electrical', '/service-request-electrical/'),
+      P('Service Request — Plumbing', '/service-request-plumbing/'),
+      P('Service Request — HVAC', '/service-request-hvac/'),
+      P('Service Request — Emergency', '/service-request-emergency/')
+    ]);
+
+    const utility = CL('Utility & Legal', [
+      P('Privacy Policy', '/privacy-policy/'),
+      P('SMS Terms of Service', '/sms-terms/'),
+      P('HTML Sitemap', '/html-sitemap/'),
+      P('No Leaks In This House', '/no-leaks-in-this-house/')
+    ]);
+
+    return P('Home', '/', [about, plumbing, air, electrical, nushield, serviceArea, contact, utility]);
+  }
+
+  // ---------- helpers ----------
+  root() {
+    const v = this.version();
+    if (!this._cache || this._cacheV !== v) {
+      this._cache = this.norm(this.build(v), 'r', 0);
+      this._cacheV = v;
+    }
+    return this._cache;
+  }
+  norm(n, id, depth) {
+    n.id = id;
+    n.depth = depth;
+    n.children = (n.children || []).map((c, i) => this.norm(c, id + '.' + i, depth + 1));
+    return n;
+  }
+  version() { return this.state.version || this.props.initialVersion || 'current'; }
+  view() { return this.state.view || this.props.initialView || 'map'; }
+  expandDepth() { return this.props.expandDepth == null ? 2 : this.props.expandDepth; }
+  isOpen(n) {
+    const c = this.state.collapsed;
+    if (Object.prototype.hasOwnProperty.call(c, n.id)) return c[n.id];
+    return n.kind !== 'cluster' && n.depth < this.expandDepth();
+  }
+  toggle(n) {
+    const open = this.isOpen(n);
+    this.setState({ collapsed: Object.assign({}, this.state.collapsed, { [n.id]: !open }) });
+  }
+  setAll(open) {
+    const c = {};
+    const walk = (n) => { if (n.children.length) c[n.id] = open; n.children.forEach(walk); };
+    walk(this.root());
+    this.setState({ collapsed: c });
+  }
+  flatten(n, out) { out.push(n); n.children.forEach((c) => this.flatten(c, out)); return out; }
+
+  componentDidMount() {
+    const el = this.scrollEl;
+    if (!el) return;
+    el.addEventListener('wheel', (e) => {
+      if (!(e.ctrlKey || e.metaKey)) return;
+      e.preventDefault();
+      const z = Math.min(1.6, Math.max(0.35, this.state.zoom - e.deltaY * 0.0015));
+      this.setState({ zoom: Math.round(z * 100) / 100 });
+    }, { passive: false });
+    let dragging = false, sx = 0, sy = 0, sl = 0, st = 0;
+    el.addEventListener('mousedown', (e) => {
+      if (e.target.closest('a,button,input')) return;
+      dragging = true; sx = e.clientX; sy = e.clientY; sl = el.scrollLeft; st = el.scrollTop;
+      el.style.cursor = 'grabbing';
+    });
+    window.addEventListener('mousemove', (e) => {
+      if (!dragging) return;
+      el.scrollLeft = sl - (e.clientX - sx);
+      el.scrollTop = st - (e.clientY - sy);
+    });
+    window.addEventListener('mouseup', () => { dragging = false; el.style.cursor = 'grab'; });
+  }
+
+  renderVals() {
+    const root = this.root();
+    const version = this.version(), view = this.view();
+    const zoom = this.state.zoom;
+    const NW = 250, GAP = 62, RH = 46, NH = 38, COL = NW + GAP;
+
+    const pages = [], clusters = [], edges = [];
+    let row = 0, maxDepth = 0;
+    const walk = (n, parentRec) => {
+      const x = n.depth * COL, y = row * RH;
+      row++;
+      maxDepth = Math.max(maxDepth, n.depth);
+      const open = this.isOpen(n);
+      const rec = {
+        id: n.id, name: n.name, path: n.url || '—', href: n.url ? BASE + n.url : null,
+        url: n.url, x, y, dot: n.isNew ? '#FBBC04' : '#2FA84F',
+        fw: n.depth <= 1 ? 700 : n.depth === 2 ? 600 : 400,
+        hasKids: n.children.length > 0, toggleLabel: open ? '−' : '+' + n.children.length,
+        countLabel: n.note || n.children.length + ' pages',
+        onToggle: () => this.toggle(n)
+      };
+      (n.kind === 'cluster' ? clusters : pages).push(rec);
+      if (parentRec) {
+        const x1 = parentRec.x + NW, y1 = parentRec.y + NH / 2, y2 = y + NH / 2;
+        edges.push({ d: 'M' + x1 + ' ' + y1 + ' C' + (x1 + 34) + ' ' + y1 + ', ' + (x - 34) + ' ' + y2 + ', ' + x + ' ' + y2 });
+      }
+      if (open) n.children.forEach((c) => walk(c, rec));
+    };
+    walk(root, null);
+
+    const cw = (maxDepth + 1) * COL, ch = row * RH + 8;
+    const all = this.flatten(root, []);
+    const q = this.state.query.trim().toLowerCase();
+    const listRows = all.filter((n) => !q || n.name.toLowerCase().indexOf(q) >= 0 || (n.url || '').toLowerCase().indexOf(q) >= 0)
+      .map((n) => ({
+        name: n.name, path: n.url || (n.kind === 'cluster' ? 'group' : '—'), url: n.url,
+        href: n.url ? BASE + n.url : null, indent: Math.min(n.depth, 6) * 22,
+        dot: n.isNew ? '#FBBC04' : n.kind === 'cluster' ? '#3F90CF' : '#2FA84F',
+        fw: n.depth <= 1 ? 700 : n.depth === 2 ? 600 : 400
+      }));
+
+    const newCount = all.filter((n) => n.isNew).length;
+    const pageCount = all.filter((n) => n.kind !== 'cluster').length;
+    const on = { background: '#E7F3FF', color: '#151A42' }, off = { background: 'transparent', color: 'rgba(255,255,255,.75)' };
+    const cur = version === 'current' ? on : off, fut = version === 'current' ? off : on;
+    const mv = view === 'map' ? on : off, lv = view === 'map' ? off : on;
+
+    return {
+      isMap: view === 'map', isList: view === 'list',
+      pages, clusters, edges, cw, ch, zoom,
+      sw: Math.round((cw + 80) * zoom), sh: Math.round((ch + 64) * zoom),
+      zoomLabel: Math.round(zoom * 100) + '%',
+      versionTitle: version === 'current' ? 'Current sitemap — callnublue.com' : 'Future state — proposed structure',
+      countLabel: version === 'current'
+        ? pageCount + ' pages mapped · 170 blog posts collapsed · city variants grouped'
+        : pageCount + ' pages · ' + newCount + ' new pages proposed (yellow)',
+      curBg: cur.background, curFg: cur.color, futBg: fut.background, futFg: fut.color,
+      mapBg: mv.background, mapFg: mv.color, listBg: lv.background, listFg: lv.color,
+      listRows, query: this.state.query,
+      scrollRef: (el) => { this.scrollEl = el; },
+      showCurrent: () => this.setState({ version: 'current', collapsed: {} }),
+      showFuture: () => this.setState({ version: 'future', collapsed: {} }),
+      showMap: () => this.setState({ view: 'map' }),
+      showList: () => this.setState({ view: 'list' }),
+      zoomIn: () => this.setState({ zoom: Math.min(1.6, Math.round((zoom + 0.1) * 100) / 100) }),
+      zoomOut: () => this.setState({ zoom: Math.max(0.35, Math.round((zoom - 0.1) * 100) / 100) }),
+      zoomReset: () => this.setState({ zoom: 0.85 }),
+      expandAll: () => this.setAll(true),
+      collapseAll: () => this.setAll(false),
+      onQuery: (e) => this.setState({ query: e.target.value })
+    };
+  }
+}
+
+</script>
+</body>
+</html>
