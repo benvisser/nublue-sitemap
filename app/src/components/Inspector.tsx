@@ -221,6 +221,76 @@ export function Inspector({ node, onClose, onLoaded }: InspectorProps) {
                 <div className="pending-note">Local SEO score &amp; content score — SE Ranking integration coming soon.</div>
               )}
 
+              {seRankingLive &&
+                (row.auditDetail ? (
+                  <div>
+                    <h3
+                      className="section-title"
+                      title="Real per-page facts from SE Ranking's Website Audit crawl (the 'Crawled pages' section) — not derived, this is what their crawler found on this exact URL."
+                    >
+                      Website Audit — crawled page details ⓘ
+                    </h3>
+                    <div className="stat-tiles" style={{ marginBottom: 10 }}>
+                      <div className="stat-tile">
+                        <span className="stat-tile__label">HTTP status</span>
+                        <span className="stat-tile__value">{row.auditDetail.status ?? '—'}</span>
+                      </div>
+                      <div className="stat-tile">
+                        <span className="stat-tile__label">Indexability</span>
+                        <span className="stat-tile__value" style={{ fontSize: 20 }}>
+                          {row.auditDetail.indexableStatus ?? '—'}
+                        </span>
+                      </div>
+                      <div className="stat-tile">
+                        <span className="stat-tile__label">Word count</span>
+                        <span className="stat-tile__value">{formatNumber(row.auditDetail.wordsCount)}</span>
+                      </div>
+                      <div className="stat-tile">
+                        <span className="stat-tile__label">Inlinks</span>
+                        <span className="stat-tile__value">{formatNumber(row.auditDetail.inlinks)}</span>
+                      </div>
+                      <div className="stat-tile">
+                        <span className="stat-tile__label">Outlinks (internal)</span>
+                        <span className="stat-tile__value">{formatNumber(row.auditDetail.outlinksInternal)}</span>
+                      </div>
+                      <div className="stat-tile">
+                        <span className="stat-tile__label">Outlinks (external)</span>
+                        <span className="stat-tile__value">{formatNumber(row.auditDetail.outlinksExternal)}</span>
+                      </div>
+                      <div className="stat-tile">
+                        <span className="stat-tile__label">Traffic forecast</span>
+                        <span className="stat-tile__value">{formatNumber(row.auditDetail.trafficForecast)}</span>
+                        <span className="stat-tile__sub">SE Ranking's own estimate</span>
+                      </div>
+                      <div className="stat-tile">
+                        <span className="stat-tile__label">Keywords (audit)</span>
+                        <span className="stat-tile__value">{formatNumber(row.auditDetail.numKeywords)}</span>
+                      </div>
+                    </div>
+                    <ul className="issue-list" style={{ marginBottom: 0 }}>
+                      <li>
+                        <strong>Title:</strong> {row.auditDetail.title || <em>missing</em>}
+                      </li>
+                      <li>
+                        <strong>Meta description:</strong> {row.auditDetail.description || <em>missing</em>}
+                      </li>
+                      <li>
+                        <strong>H1:</strong> {row.auditDetail.h1 || <em>missing</em>}
+                      </li>
+                      {row.auditDetail.canonicalUrl && (
+                        <li>
+                          <strong>Canonical:</strong> {row.auditDetail.canonicalUrl}
+                        </li>
+                      )}
+                    </ul>
+                  </div>
+                ) : (
+                  <div className="pending-note">
+                    This page wasn't found in the most recent SE Ranking Website Audit crawl — it may not have been recrawled since being
+                    added, or it 404'd/redirected during the crawl.
+                  </div>
+                ))}
+
               {seRankingLive ? (
                 row.topQueries.length > 0 && (
                   <div>

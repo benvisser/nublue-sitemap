@@ -29,6 +29,32 @@ export interface SearchQuery {
   position: number;
 }
 
+/** Real per-page crawl details from SE Ranking's Website Audit tool (the
+ * "Crawled pages" section) — on-page facts as their crawler actually
+ * found them on this page, not a derived score. Null fields mean SE
+ * Ranking didn't report that field for this page, not that it's zero. */
+export interface AuditDetail {
+  /** HTTP status the crawler got for this URL, e.g. 200, 404 */
+  status: number | null;
+  title: string | null;
+  description: string | null;
+  h1: string | null;
+  wordsCount: number | null;
+  /** e.g. "indexable", "noindex", "canonicalized" */
+  indexableStatus: string | null;
+  canonicalUrl: string | null;
+  /** Internal links pointing at this page */
+  inlinks: number | null;
+  outlinksInternal: number | null;
+  outlinksExternal: number | null;
+  /** SE Ranking's own estimated monthly organic traffic for this page */
+  trafficForecast: number | null;
+  /** Keywords SE Ranking associates with this page in the audit (may
+   * differ from topQueries.length, which counts domain-wide tracked
+   * keywords whose target URL matches this path) */
+  numKeywords: number | null;
+}
+
 export interface PageSeoData {
   /** URL path key, matches PageNode.url exactly, e.g. "/electrical/panels/" */
   path: string;
@@ -74,6 +100,12 @@ export interface PageSeoData {
   keywordCount: number;
   top3Keywords: number;
   issues: string[];
+  /** This page's raw Website Audit crawl record, or null if the most
+   * recent SE Ranking Website Audit didn't crawl this exact path (e.g. it
+   * hasn't been recrawled since the page was added, or it 404'd/redirected
+   * during the crawl) — distinct from SE Ranking simply not being
+   * connected at all, which is `!sources.seRanking` on the API response. */
+  auditDetail: AuditDetail | null;
   /** Every keyword SE Ranking tracks against this page, sorted by volume
    * descending — current rank position for each is the whole point of
    * this list, not just the top few. */

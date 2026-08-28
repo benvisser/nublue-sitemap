@@ -60,6 +60,18 @@ export interface SeRankingAuditPage {
   url: string;
   score: number;
   issues: string[];
+  status: number | null;
+  title: string | null;
+  description: string | null;
+  h1: string | null;
+  wordsCount: number | null;
+  indexableStatus: string | null;
+  canonicalUrl: string | null;
+  inlinks: number | null;
+  outlinksInternal: number | null;
+  outlinksExternal: number | null;
+  trafficForecast: number | null;
+  numKeywords: number | null;
 }
 
 /** Every keyword SE Ranking has organic-ranking data for on this domain
@@ -114,6 +126,9 @@ interface AuditPageItem {
   h1_duplicate?: boolean;
   traffic_forecast?: number;
   num_keywords?: number;
+  inlinks?: number;
+  outlinks_internal?: number;
+  outlinks_external?: number;
 }
 
 interface AuditPagesResponse {
@@ -215,9 +230,24 @@ export async function getPageAudit(): Promise<SeRankingAuditPage[]> {
 
   const pages = await fetchAllAuditPages(audit.id);
   if (pages.length === 0) console.log('[seRankingClient] getPageAudit: audit', audit.id, 'returned 0 crawled pages');
-  return pages.map((p) => ({
-    url: toRelativePath(p.url),
-    score: scoreFor(p),
-    issues: issuesFor(p),
-  }));
+  return pages.map((p) => {
+    const status = Number(p.status);
+    return {
+      url: toRelativePath(p.url),
+      score: scoreFor(p),
+      issues: issuesFor(p),
+      status: Number.isFinite(status) ? status : null,
+      title: p.title || null,
+      description: p.description || null,
+      h1: p.h1 || null,
+      wordsCount: p.words_count ?? null,
+      indexableStatus: p.indexable_status ?? null,
+      canonicalUrl: p.canonical_url ?? null,
+      inlinks: p.inlinks ?? null,
+      outlinksInternal: p.outlinks_internal ?? null,
+      outlinksExternal: p.outlinks_external ?? null,
+      trafficForecast: p.traffic_forecast ?? null,
+      numKeywords: p.num_keywords ?? null,
+    };
+  });
 }

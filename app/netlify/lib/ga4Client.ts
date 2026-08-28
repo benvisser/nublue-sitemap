@@ -100,7 +100,12 @@ export async function getPageTraffic(path: string, days = 28): Promise<PageTraff
         { name: 'current', startDate: `${days}daysAgo`, endDate: 'today' },
         { name: 'previous', startDate: `${days * 2}daysAgo`, endDate: `${days + 1}daysAgo` },
       ],
-      dimensions: [{ name: 'dateRange' }, { name: 'sessionDefaultChannelGroup' }],
+      // GA4 auto-appends a "dateRange" pseudo-dimension to each row
+      // whenever named dateRanges are used — listing it here explicitly
+      // 400s ("Field dateRange is not a dimension"). It always comes back
+      // as the LAST value in dimensionValues, after the ones actually
+      // listed below.
+      dimensions: [{ name: 'sessionDefaultChannelGroup' }],
       metrics: [{ name: 'sessions' }, { name: 'userEngagementDuration' }],
       dimensionFilter: pageFilter(path),
       limit: 50,
@@ -118,8 +123,8 @@ export async function getPageTraffic(path: string, days = 28): Promise<PageTraff
   const out = { ...EMPTY_TRAFFIC };
   let currentEngagementSeconds = 0;
   for (const row of byPeriod.rows || []) {
-    const period = row.dimensionValues[0]?.value; // 'current' | 'previous'
-    const channel = row.dimensionValues[1]?.value ?? '';
+    const channel = row.dimensionValues[0]?.value ?? '';
+    const period = row.dimensionValues[1]?.value; // implicit dateRange dimension, appended last: 'current' | 'previous'
     const sessions = Number(row.metricValues[0]?.value || 0);
     const engagement = Number(row.metricValues[1]?.value || 0);
     const isOrganic = channel === 'Organic Search';

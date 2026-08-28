@@ -63,6 +63,7 @@ export function computePageRow(
     keywordCount: 0,
     top3Keywords: 0,
     issues: [],
+    auditDetail: null,
     topQueries: [],
     recommendations: [],
     projected: false,
@@ -83,6 +84,20 @@ export function computePageRow(
   if (audit) {
     row.contentScore = audit.score;
     row.issues = audit.issues;
+    row.auditDetail = {
+      status: audit.status,
+      title: audit.title,
+      description: audit.description,
+      h1: audit.h1,
+      wordsCount: audit.wordsCount,
+      indexableStatus: audit.indexableStatus,
+      canonicalUrl: audit.canonicalUrl,
+      inlinks: audit.inlinks,
+      outlinksInternal: audit.outlinksInternal,
+      outlinksExternal: audit.outlinksExternal,
+      trafficForecast: audit.trafficForecast,
+      numKeywords: audit.numKeywords,
+    };
   }
 
   row.localSeoScore = computeLocalSeoScore(row.topQueries, row.contentScore);
@@ -115,6 +130,7 @@ export function computeProjectedRow(path: string, parent: PageSeoData | null): P
     keywordCount: 0,
     top3Keywords: 0,
     issues: [],
+    auditDetail: null,
     topQueries: parent ? parent.topQueries.slice(0, 3) : [],
     recommendations: ["Build out content once this page ships — projected from the parent page's query cluster"],
     projected: true,
