@@ -32,6 +32,14 @@ function store() {
   return getStore('seranking-project-pull');
 }
 
+// Blob key is versioned ('current-v2', not 'current') because adding the
+// `auditId` field to ProjectPull without bumping it left old cached blobs
+// (12h TTL, so not naturally expiring for a while) missing that field
+// entirely — `pull.auditId` came back `undefined`, and `undefined != null`
+// is false in JS, so get-page-seo.mts silently skipped the per-page issues
+// fetch instead of erroring loudly. Bump this suffix again if ProjectPull's
+// shape changes in a way old cached blobs wouldn't satisfy.
+
 function isFresh(pull: ProjectPull): boolean {
   return Date.now() - new Date(pull.fetchedAt).getTime() < TTL_MS;
 }
@@ -40,7 +48,7 @@ function isFresh(pull: ProjectPull): boolean {
  * get-seo-snapshot.mts, which just wants to report current status, not
  * cause a live SE Ranking call on every toolbar render. */
 export async function peekProjectPull(): Promise<ProjectPull | null> {
-  return (await store().get('current', { type: 'json' })) as ProjectPull | null;
+  return (await store().get('current-v2', { type: 'json' })) as ProjectPull | null;
 }
 
 /** Returns the cached pull if it's still fresh; otherwise re-pulls from SE
@@ -48,7 +56,7 @@ export async function peekProjectPull(): Promise<ProjectPull | null> {
  * refresh). A failed keyword re-pull falls back to the last good cached
  * pull (stale-but-real beats nothing) rather than wiping it out. */
 export async function getProjectPull(force = false): Promise<ProjectPull> {
-  const cached = (await store().get('current', { type: 'json' })) as ProjectPull | null;
+  const cached = (await store().get('current-v2', { type: 'json' })) as ProjectPull | null;
   if (cached && !force && isFresh(cached)) return cached;
 
   const [keywordResult, auditResult, auditIdResult] = await Promise.allSettled([getKeywordPositions(), getPageAudit(), findAudit()]);
@@ -73,6 +81,6 @@ export async function getProjectPull(force = false): Promise<ProjectPull> {
     fetchedAt: new Date().toISOString(),
     ok: true,
   };
-  await store().setJSON('current', fresh);
+  await store().setJSON('current-v2', fresh);
   return fresh;
 }
