@@ -18,7 +18,7 @@ export default function App() {
 
   const { allNodes, layout, isOpen, toggle, setAll } = useSitemap(version);
   const { zoom, scrollRef, zoomIn, zoomOut, zoomReset } = usePanZoom();
-  const { snapshot, hasSnapshot } = useSeoSnapshot();
+  const { snapshot, hasSnapshot, refreshState, triggerRefresh } = useSeoSnapshot();
 
   const pageCount = allNodes.filter((n) => n.kind !== 'cluster').length;
   const newCount = allNodes.filter((n) => n.isNew).length;
@@ -48,6 +48,8 @@ export default function App() {
         onColorModeChange={setColorMode}
         hasSnapshot={hasSnapshot}
         snapshotGeneratedAt={snapshot.generatedAt}
+        refreshState={refreshState}
+        onRefresh={triggerRefresh}
         onExpandAll={() => setAll(true)}
         onCollapseAll={() => setAll(false)}
       />
